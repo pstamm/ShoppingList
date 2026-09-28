@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
@@ -57,7 +58,7 @@ public class JwtTokenService : IJwtTokenService
 
     public string CreateRefreshToken()
     {
-        return Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
     }
 
     public ClaimsPrincipal ValidateAccessToken(string token)

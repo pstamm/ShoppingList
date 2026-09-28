@@ -1,7 +1,12 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Data;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using ShoppingApi.Data;
 using ShoppingApi.Domain.Entities;
 using ShoppingApi.DTOs.Auth;
 using ShoppingApi.Services.Authentication;
@@ -13,17 +18,20 @@ namespace ShoppingApi.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IJwtTokenService _jwtTokenService;
+    private readonly ApplicationDbContext _dbContext;
+    private readonly IConfiguration _configuration;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
-        SignInManager<ApplicationUser> signInManager,
-        IJwtTokenService jwtTokenService)
+        IJwtTokenService jwtTokenService,
+        ApplicationDbContext dbContext,
+        IConfiguration configuration)
     {
         _userManager = userManager;
-        _signInManager = signInManager;
         _jwtTokenService = jwtTokenService;
+        _dbContext = dbContext;
+        _configuration = configuration;
     }
 
     [HttpPost("register")]
@@ -59,7 +67,14 @@ public class AuthController : ControllerBase
                 .ToDictionary(g => g.Key, g => g.Select(e => e.Description).ToArray())));
         }
 
-        await _userManager.AddToRoleAsync(user, "User");
+        var roleResult = await _userManager.AddToRoleAsync(user, "User");
+        if (!roleResult.Succeeded)
+        {
+            await _userManager.DeleteAsync(user);
+            return ValidationProblem(new ValidationProblemDetails(roleResult.Errors
+                .GroupBy(error => error.Code)
+                .ToDictionary(group => group.Key, group => group.Select(error => error.Description).ToArray())));
+        }
 
         return StatusCode(StatusCodes.Status201Created, new { message = "User registered successfully." });
     }
@@ -88,27 +103,76 @@ public class AuthController : ControllerBase
         var roles = await _userManager.GetRolesAsync(user);
         var accessToken = _jwtTokenService.CreateAccessToken(user, roles);
         var refreshToken = _jwtTokenService.CreateRefreshToken();
+        await StoreRefreshTokenAsync(user, refreshToken);
 
         return Ok(new AuthResponse(accessToken, refreshToken, user.Email ?? string.Empty, user.Id, roles.ToList()));
     }
 
     [HttpPost("refresh")]
     [AllowAnonymous]
-    public IActionResult Refresh([FromBody] RefreshRequest request)
+    public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.RefreshToken))
         {
             return Unauthorized();
         }
 
-        return Ok(new { message = "Refresh token validation is required in a production implementation." });
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var tokenHash = HashToken(request.RefreshToken);
+        var storedToken = await _dbContext.RefreshTokens
+            .Include(token => token.User)
+            .FirstOrDefaultAsync(token => token.TokenHash == tokenHash);
+
+        if (storedToken is null ||
+            storedToken.IsRevoked ||
+            storedToken.IsExpired ||
+            !storedToken.User.IsActive)
+        {
+            return Unauthorized();
+        }
+
+        var replacementToken = _jwtTokenService.CreateRefreshToken();
+        storedToken.RevokedAt = DateTimeOffset.UtcNow;
+        storedToken.RevokedByIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+        storedToken.ReplacedByTokenId = HashToken(replacementToken);
+        _dbContext.RefreshTokens.Add(CreateRefreshTokenEntity(storedToken.User, replacementToken));
+        await _dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        var roles = await _userManager.GetRolesAsync(storedToken.User);
+        var accessToken = _jwtTokenService.CreateAccessToken(storedToken.User, roles);
+        return Ok(new AuthResponse(
+            accessToken,
+            replacementToken,
+            storedToken.User.Email ?? string.Empty,
+            storedToken.User.Id,
+            roles.ToList()));
     }
 
     [HttpPost("logout")]
     [Authorize]
-    public IActionResult Logout()
+    public async Task<IActionResult> Logout([FromBody] RefreshRequest request)
     {
-        return Ok(new { message = "Logged out successfully." });
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null || string.IsNullOrWhiteSpace(request.RefreshToken))
+        {
+            return NoContent();
+        }
+
+        var tokenHash = HashToken(request.RefreshToken);
+        var token = await _dbContext.RefreshTokens.FirstOrDefaultAsync(item =>
+            item.UserId == userId &&
+            item.TokenHash == tokenHash &&
+            item.RevokedAt == null);
+
+        if (token is not null)
+        {
+            token.RevokedAt = DateTimeOffset.UtcNow;
+            token.RevokedByIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+            await _dbContext.SaveChangesAsync();
+        }
+
+        return NoContent();
     }
 
     [HttpGet("me")]
@@ -129,5 +193,34 @@ public class AuthController : ControllerBase
 
         var roles = await _userManager.GetRolesAsync(user);
         return Ok(new MeResponse(user.Id, user.Email ?? string.Empty, roles.ToList(), user.IsActive));
+    }
+
+    private async Task StoreRefreshTokenAsync(ApplicationUser user, string token)
+    {
+        _dbContext.RefreshTokens.Add(CreateRefreshTokenEntity(user, token));
+        await _dbContext.SaveChangesAsync();
+    }
+
+    private RefreshToken CreateRefreshTokenEntity(ApplicationUser user, string token)
+    {
+        var lifetimeDays = _configuration.GetValue<int?>("Jwt:RefreshTokenLifetimeDays") ?? 14;
+        if (lifetimeDays <= 0)
+        {
+            throw new InvalidOperationException("Jwt:RefreshTokenLifetimeDays must be greater than zero.");
+        }
+
+        return new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = HashToken(token),
+            CreatedAt = DateTimeOffset.UtcNow,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(lifetimeDays),
+            CreatedByIp = HttpContext.Connection.RemoteIpAddress?.ToString()
+        };
+    }
+
+    private static string HashToken(string token)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     }
 }

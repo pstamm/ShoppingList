@@ -1,0 +1,194 @@
+@page "/products"
+@attribute [Authorize]
+@inject IProductCatalogClient Catalog
+
+<PageTitle>Products</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Products</h1>
+    <a class="btn btn-primary" href="/products/new">Add product</a>
+</div>
+
+<EditForm Model="filters" OnValidSubmit="SearchAsync" FormName="product-search" class="row g-2 mb-4">
+    <div class="col-md-6">
+        <label class="visually-hidden" for="product-search">Search products</label>
+        <InputText id="product-search" class="form-control" placeholder="Search products" @bind-Value="filters.Search" />
+    </div>
+    <div class="col-md-4">
+        <label class="visually-hidden" for="product-type-filter">Product type</label>
+        <InputSelect id="product-type-filter" class="form-select" @bind-Value="filters.ProductTypeId">
+            <option value="">All product types</option>
+            @foreach (var type in productTypes)
+            {
+                <option value="@type.Id">@type.Name</option>
+            }
+        </InputSelect>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+        <button class="btn btn-outline-primary" type="submit" disabled="@isLoading">Search</button>
+        <button class="btn btn-outline-secondary" type="button" @onclick="ClearFiltersAsync" disabled="@isLoading">Clear</button>
+    </div>
+</EditForm>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+@if (isLoading)
+{
+    <p role="status">Loading products...</p>
+}
+else if (products.Count == 0)
+{
+    <p>No products found.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Picture</th>
+                    <th scope="col">Product</th>
+                    <th scope="col">Type</th>
+                    <th scope="col" class="text-end">Price</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var product in products)
+                {
+                    <tr>
+                        <td>
+                            @if (product.Picture is { Length: > 0 } picture && !string.IsNullOrWhiteSpace(product.PictureContentType))
+                            {
+                                <img class="catalog-product-picture" src="@PictureSource(product)" alt="@product.Name" />
+                            }
+                            else
+                            {
+                                <span class="catalog-product-placeholder" aria-label="No picture">No image</span>
+                            }
+                        </td>
+                        <td>@product.Name</td>
+                        <td>@GetProductTypeName(product.ProductTypeId)</td>
+                        <td class="text-end">@product.Price.ToString("C")</td>
+                        <td>
+                            <div class="d-flex gap-2">
+                                <a class="btn btn-sm btn-outline-primary" href="@($"/products/{product.Id}/edit")">Edit</a>
+                                @if (deletingProductId == product.Id)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteAsync(product.Id)">Confirm delete</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="CancelDelete">Cancel</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => BeginDelete(product.Id)">Delete</button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private readonly ProductSearchFilters filters = new();
+    private IReadOnlyList<ProductDto> products = [];
+    private IReadOnlyList<ProductTypeDto> productTypes = [];
+    private string? errorMessage;
+    private bool isLoading;
+    private int? deletingProductId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        deletingProductId = null;
+        await LoadAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        filters.Search = string.Empty;
+        filters.ProductTypeId = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        errorMessage = null;
+        isLoading = true;
+        try
+        {
+            var productsTask = Catalog.GetProductsAsync(filters.Search, filters.ProductTypeId);
+            var productTypesTask = Catalog.GetProductTypesAsync();
+            await Task.WhenAll(productsTask, productTypesTask);
+            products = await productsTask;
+            productTypes = await productTypesTask;
+        }
+        catch (CatalogApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The product catalogue could not be reached.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task DeleteAsync(int productId)
+    {
+        errorMessage = null;
+        try
+        {
+            await Catalog.DeleteProductAsync(productId);
+            deletingProductId = null;
+            await LoadAsync();
+        }
+        catch (CatalogApiException ex)
+        {
+            errorMessage = ex.Message;
+            deletingProductId = null;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The product could not be deleted because the API could not be reached.";
+        }
+    }
+
+    private void BeginDelete(int productId)
+    {
+        deletingProductId = productId;
+    }
+
+    private void CancelDelete()
+    {
+        deletingProductId = null;
+    }
+
+    private string GetProductTypeName(int productTypeId)
+    {
+        return productTypes.FirstOrDefault(type => type.Id == productTypeId)?.Name ?? "Unknown";
+    }
+
+    private static string PictureSource(ProductDto product)
+    {
+        return $"data:{product.PictureContentType};base64,{Convert.ToBase64String(product.Picture!)}";
+    }
+
+    private sealed class ProductSearchFilters
+    {
+        public string Search { get; set; } = string.Empty;
+        public int? ProductTypeId { get; set; }
+    }
+}

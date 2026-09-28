@@ -1,0 +1,250 @@
+@page "/products/new"
+@page "/products/{Id:int}/edit"
+@attribute [Authorize]
+@inject IProductCatalogClient Catalog
+@inject NavigationManager Navigation
+
+<PageTitle>@(IsEdit ? "Edit product" : "Add product")</PageTitle>
+
+<h1>@(IsEdit ? "Edit product" : "Add product")</h1>
+
+@if (isLoading)
+{
+    <p role="status">Loading product...</p>
+}
+else if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+else
+{
+    <EditForm Model="model" OnValidSubmit="SaveAsync" FormName="product-editor">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label" for="product-name">Name</label>
+            <InputText id="product-name" class="form-control" @bind-Value="model.Name" />
+            <ValidationMessage For="() => model.Name" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="product-type">Product type</label>
+            <InputSelect id="product-type" class="form-select" @bind-Value="model.ProductTypeId">
+                <option value="0">Select a product type</option>
+                @foreach (var type in productTypes)
+                {
+                    <option value="@type.Id">@type.Name</option>
+                }
+            </InputSelect>
+            <ValidationMessage For="() => model.ProductTypeId" />
+            @if (productTypes.Count == 0)
+            {
+                <div class="form-text">Create a product type before adding products.</div>
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="product-price">Price</label>
+            <InputNumber id="product-price" class="form-control" @bind-Value="model.Price" step="0.01" min="0" />
+            <ValidationMessage For="() => model.Price" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="product-picture">Picture (JPEG, PNG or WebP; max 5 MB)</label>
+            <InputFile id="product-picture" class="form-control" accept="image/jpeg,image/png,image/webp" OnChange="PictureChangedAsync" />
+            @if (!string.IsNullOrWhiteSpace(model.PictureDataUrl))
+            {
+                <div class="mt-3">
+                    <img class="catalog-editor-picture" src="@model.PictureDataUrl" alt="Product picture preview" />
+                    <button class="btn btn-sm btn-outline-danger d-block mt-2" type="button" @onclick="RemovePicture">Remove picture</button>
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit" disabled="@isSaving || productTypes.Count == 0">
+                @(isSaving ? "Saving..." : "Save")
+            </button>
+            <a class="btn btn-outline-secondary" href="/products">Cancel</a>
+        </div>
+    </EditForm>
+}
+
+@code {
+    private const long MaxPictureSize = 5 * 1024 * 1024;
+    private readonly ProductEditorModel model = new();
+    private IReadOnlyList<ProductTypeDto> productTypes = [];
+    private ProductDto? originalProduct;
+    private string? errorMessage;
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool clearPicture;
+
+    [Parameter]
+    public int? Id { get; set; }
+
+    private bool IsEdit => Id.HasValue;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            productTypes = await Catalog.GetProductTypesAsync();
+            if (Id is int id)
+            {
+                originalProduct = await Catalog.GetProductAsync(id);
+                model.Name = originalProduct.Name;
+                model.ProductTypeId = originalProduct.ProductTypeId;
+                model.Price = originalProduct.Price;
+                model.Picture = originalProduct.Picture;
+                model.PictureContentType = originalProduct.PictureContentType;
+                model.PictureWidth = originalProduct.PictureWidth;
+                model.PictureHeight = originalProduct.PictureHeight;
+                model.PictureDataUrl = PictureSource(originalProduct);
+            }
+            else
+            {
+                originalProduct = null;
+                model.Name = string.Empty;
+                model.ProductTypeId = 0;
+                model.Price = 0;
+                model.Picture = null;
+                model.PictureContentType = null;
+                model.PictureWidth = null;
+                model.PictureHeight = null;
+                model.PictureDataUrl = null;
+                clearPicture = false;
+            }
+        }
+        catch (CatalogApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The product catalogue could not be reached.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task PictureChangedAsync(InputFileChangeEventArgs args)
+    {
+        errorMessage = null;
+        var file = args.File;
+        if (file.Size > MaxPictureSize)
+        {
+            errorMessage = "The picture exceeds the 5 MB upload limit.";
+            return;
+        }
+
+        if (file.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))
+        {
+            errorMessage = "Choose a JPEG, PNG or WebP picture.";
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxPictureSize);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            model.Picture = memory.ToArray();
+            model.PictureContentType = file.ContentType;
+            model.PictureWidth = null;
+            model.PictureHeight = null;
+            model.PictureDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(model.Picture)}";
+            clearPicture = false;
+        }
+        catch (IOException)
+        {
+            errorMessage = "The picture could not be read. Try selecting it again.";
+        }
+    }
+
+    private void RemovePicture()
+    {
+        model.Picture = null;
+        model.PictureContentType = null;
+        model.PictureWidth = null;
+        model.PictureHeight = null;
+        model.PictureDataUrl = null;
+        clearPicture = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        errorMessage = null;
+        isSaving = true;
+
+        try
+        {
+            var request = new SaveProductRequest(
+                model.Name,
+                model.ProductTypeId,
+                model.Price,
+                clearPicture ? null : model.Picture,
+                clearPicture ? null : model.PictureContentType,
+                clearPicture ? null : model.PictureWidth,
+                clearPicture ? null : model.PictureHeight);
+            if (IsEdit)
+            {
+                await Catalog.UpdateProductAsync(Id!.Value, request);
+            }
+            else
+            {
+                await Catalog.CreateProductAsync(request);
+            }
+
+            Navigation.NavigateTo("/products");
+        }
+        catch (CatalogApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The product could not be saved because the API could not be reached.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private static string? PictureSource(ProductDto product)
+    {
+        return product.Picture is { Length: > 0 } picture &&
+               !string.IsNullOrWhiteSpace(product.PictureContentType)
+            ? $"data:{product.PictureContentType};base64,{Convert.ToBase64String(picture)}"
+            : null;
+    }
+
+    private sealed class ProductEditorModel
+    {
+        [Required, StringLength(200)]
+        public string Name { get; set; } = string.Empty;
+
+        [Range(1, int.MaxValue, ErrorMessage = "Select a product type.")]
+        public int ProductTypeId { get; set; }
+
+        [Range(typeof(decimal), "0", "9999999999999999", ErrorMessage = "Price cannot be negative.")]
+        public decimal Price { get; set; }
+
+        public byte[]? Picture { get; set; }
+        public string? PictureContentType { get; set; }
+        public int? PictureWidth { get; set; }
+        public int? PictureHeight { get; set; }
+        public string? PictureDataUrl { get; set; }
+    }
+}
