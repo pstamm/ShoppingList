@@ -1,0 +1,51 @@
+﻿# Build outputs
+bin/
+obj/
+[Bb]uild/
+[Ll]ib/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test results / coverage
+TestResults/
+coverage*/
+*.coverage
+*.coveragexml
+
+# ASP.NET / Blazor
+wwwroot/**/*.map
+App_Data/
+
+# Packages
+packages/
+*.nupkg
+
+# Logs / temp
+*.log
+*.tmp
+*.temp
+*.bak
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Secrets / local config
+appsettings.Local.json
+secrets.json
+*.pfx
+*.pem
+
+# Rider / JetBrains
+.idea/
+*.iml
+
+# Node / web assets (if any later)
+node_modules/
