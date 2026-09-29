@@ -111,8 +111,8 @@ public class ProductCatalogHardeningTests
         var settings = new Dictionary<string, string?>
         {
             ["Image:MaxUploadSizeBytes"] = "5242880",
-            ["Image:Width"] = "100",
-            ["Image:Height"] = "100",
+            ["Image:Width"] = "400",
+            ["Image:Height"] = "400",
             ["Image:Quality"] = "85",
             ["Image:MaxPixels"] = "40000000"
         };

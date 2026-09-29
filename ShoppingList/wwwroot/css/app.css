@@ -53,6 +53,128 @@ a, .btn-link {
     max-width: 8rem;
 }
 
+.shopping-list-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.shopping-list-product-column {
+    width: 27%;
+}
+
+.shopping-list-quantity-column {
+    width: 12%;
+}
+
+.shopping-list-notes-column {
+    width: 22%;
+}
+
+.shopping-list-actions-column {
+    width: 27%;
+}
+
+.shopping-list-truncated {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.shopping-list-number-cell {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.shopping-list-quantity-trigger {
+    font-variant-numeric: tabular-nums;
+}
+
+.shopping-list-modal-backdrop {
+    align-items: center;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 1rem;
+    position: fixed;
+    z-index: 1050;
+}
+
+.shopping-list-quantity-modal {
+    background: var(--bs-body-bg, #fff);
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    max-width: 24rem;
+    padding: 1.5rem;
+    width: 100%;
+}
+
+.shopping-list-quantity-value {
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 4rem;
+    text-align: center;
+}
+
+.shopping-list-actions {
+    min-width: 0;
+}
+
+.shopping-list-actions .btn {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.catalog-products-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.catalog-picture-column {
+    width: 14%;
+}
+
+.catalog-name-column {
+    width: 26%;
+}
+
+.catalog-type-column {
+    width: 20%;
+}
+
+.catalog-price-column {
+    width: 14%;
+}
+
+.catalog-actions-column {
+    width: 26%;
+}
+
+.catalog-product-truncated {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.catalog-picture-cell,
+.catalog-price-cell {
+    overflow: hidden;
+}
+
+.catalog-actions-cell,
+.catalog-product-actions {
+    min-width: 0;
+}
+
+.catalog-product-actions .btn {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 .pending-quantity {
     display: inline-block;
     font-variant-numeric: tabular-nums;

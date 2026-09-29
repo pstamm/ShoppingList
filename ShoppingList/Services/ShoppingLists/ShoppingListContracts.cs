@@ -21,8 +21,8 @@ public sealed record ListProductDto(
     int ProductTypeId,
     string ProductTypeName,
     decimal ProductPrice,
-    decimal QuantityToOrder,
-    decimal PendingQuantity,
+    int TipicalOrder,
+    int ToOrderNow,
     string? Notes,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
@@ -30,14 +30,14 @@ public sealed record ListProductDto(
 
 public sealed record AddListProductRequest(
     int ProductId,
-    decimal QuantityToOrder,
-    decimal PendingQuantity,
+    int TipicalOrder,
+    int ToOrderNow,
     string? Notes);
 
 public sealed record UpdateListProductRequest(
     int ProductId,
-    decimal QuantityToOrder,
-    decimal PendingQuantity,
+    int TipicalOrder,
+    int ToOrderNow,
     string? Notes,
     string RowVersion);
 
@@ -45,7 +45,8 @@ public sealed record ListShareDto(
     int Id,
     int ListId,
     string UserId,
+    string UserName,
     string Email,
     DateTimeOffset CreatedAt);
 
-public sealed record ShareListRequest(string UserId);
+public sealed record ShareListRequest(string UserName);

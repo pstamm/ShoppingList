@@ -168,8 +168,8 @@ public class ShoppingListService : IShoppingListService
         {
             ListId = listId,
             ProductId = request.ProductId,
-            QuantityToOrder = request.QuantityToOrder,
-            PendingQuantity = request.PendingQuantity,
+            TipicalOrder = request.TipicalOrder,
+            ToOrderNow = request.ToOrderNow,
             Notes = NormalizeNotes(request.Notes),
             CreatedAt = now,
             CreatedByUserId = userId,
@@ -226,8 +226,8 @@ public class ShoppingListService : IShoppingListService
         ValidateNotes(request.Notes);
         SetOriginalRowVersion(item, request.RowVersion);
         item.ProductId = request.ProductId;
-        item.QuantityToOrder = request.QuantityToOrder;
-        item.PendingQuantity = request.PendingQuantity;
+        item.TipicalOrder = request.TipicalOrder;
+        item.ToOrderNow = request.ToOrderNow;
         item.Notes = NormalizeNotes(request.Notes);
         item.UpdatedAt = DateTimeOffset.UtcNow;
         item.UpdatedByUserId = userId;
@@ -277,6 +277,7 @@ public class ShoppingListService : IShoppingListService
                 share.Id,
                 share.ListId,
                 share.UserId,
+                share.User!.UserName ?? string.Empty,
                 share.User!.Email ?? string.Empty,
                 share.CreatedAt))
             .ToListAsync();
@@ -291,25 +292,26 @@ public class ShoppingListService : IShoppingListService
         var list = await FindListAsync(listId);
         EnsureCanManageSharing(list, userId, isAdmin);
 
-        if (string.IsNullOrWhiteSpace(request.UserId))
+        if (string.IsNullOrWhiteSpace(request.UserName))
         {
-            throw new ValidationException("A user ID is required.");
+            throw new ValidationException("A username is required.");
         }
 
-        var targetUserId = request.UserId.Trim();
-        if (targetUserId == list.OwnerUserId)
-        {
-            throw new ValidationException("A list cannot be shared with its owner.");
-        }
-
+        var normalizedUserName = request.UserName.Trim().ToUpperInvariant();
         var targetUser = await _dbContext.Users
             .AsNoTracking()
-            .Where(user => user.Id == targetUserId && user.IsActive)
-            .Select(user => new { user.Id, user.Email })
+            .Where(user => user.NormalizedUserName == normalizedUserName && user.IsActive)
+            .Select(user => new { user.Id, user.UserName, user.Email })
             .FirstOrDefaultAsync();
         if (targetUser is null)
         {
             throw new KeyNotFoundException("The target user was not found or is inactive.");
+        }
+
+        var targetUserId = targetUser.Id;
+        if (targetUserId == list.OwnerUserId)
+        {
+            throw new ValidationException("A list cannot be shared with its owner.");
         }
 
         var alreadyShared = await _dbContext.ListShares
@@ -336,6 +338,7 @@ public class ShoppingListService : IShoppingListService
             share.Id,
             share.ListId,
             share.UserId,
+            targetUser.UserName ?? string.Empty,
             targetUser.Email ?? string.Empty,
             share.CreatedAt);
     }
@@ -487,8 +490,8 @@ public class ShoppingListService : IShoppingListService
             product?.ProductTypeId ?? 0,
             product?.ProductType?.Name ?? string.Empty,
             product?.Price ?? 0m,
-            item.QuantityToOrder,
-            item.PendingQuantity,
+            item.TipicalOrder,
+            item.ToOrderNow,
             item.Notes,
             item.CreatedAt,
             item.UpdatedAt,

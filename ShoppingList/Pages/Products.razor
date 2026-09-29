@@ -46,7 +46,14 @@ else if (products.Count == 0)
 else
 {
     <div class="table-responsive">
-        <table class="table align-middle">
+        <table class="table align-middle catalog-products-table">
+            <colgroup>
+                <col class="catalog-picture-column" />
+                <col class="catalog-name-column" />
+                <col class="catalog-type-column" />
+                <col class="catalog-price-column" />
+                <col class="catalog-actions-column" />
+            </colgroup>
             <thead>
                 <tr>
                     <th scope="col">Picture</th>
@@ -60,7 +67,7 @@ else
                 @foreach (var product in products)
                 {
                     <tr>
-                        <td>
+                        <td class="catalog-picture-cell">
                             @if (product.Picture is { Length: > 0 } picture && !string.IsNullOrWhiteSpace(product.PictureContentType))
                             {
                                 <img class="catalog-product-picture" src="@PictureSource(product)" alt="@product.Name" />
@@ -70,11 +77,11 @@ else
                                 <span class="catalog-product-placeholder" aria-label="No picture">No image</span>
                             }
                         </td>
-                        <td>@product.Name</td>
-                        <td>@GetProductTypeName(product.ProductTypeId)</td>
-                        <td class="text-end">@product.Price.ToString("C")</td>
-                        <td>
-                            <div class="d-flex gap-2">
+                        <td><span class="catalog-product-truncated" title="@product.Name">@product.Name</span></td>
+                        <td><span class="catalog-product-truncated" title="@GetProductTypeName(product.ProductTypeId)">@GetProductTypeName(product.ProductTypeId)</span></td>
+                        <td class="text-end catalog-price-cell">@product.Price.ToString("C")</td>
+                        <td class="catalog-actions-cell">
+                            <div class="d-flex flex-wrap gap-1 catalog-product-actions">
                                 <a class="btn btn-sm btn-outline-primary" href="@($"/products/{product.Id}/edit")">Edit</a>
                                 @if (deletingProductId == product.Id)
                                 {

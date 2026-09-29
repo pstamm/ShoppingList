@@ -10,8 +10,8 @@ public class ListProduct
     public int ProductId { get; set; }
     public Product? Product { get; set; }
 
-    public decimal QuantityToOrder { get; set; }
-    public decimal PendingQuantity { get; set; }
+    public int TipicalOrder { get; set; }
+    public int ToOrderNow { get; set; }
     public string? Notes { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

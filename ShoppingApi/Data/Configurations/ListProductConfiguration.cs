@@ -11,8 +11,8 @@ public class ListProductConfiguration : IEntityTypeConfiguration<ListProduct>
         builder.ToTable("ListProducts");
 
         builder.HasKey(x => x.Id);
-        builder.Property(x => x.QuantityToOrder).HasColumnType("decimal(18,3)");
-        builder.Property(x => x.PendingQuantity).HasColumnType("decimal(18,3)");
+        builder.Property(x => x.TipicalOrder).HasColumnType("int");
+        builder.Property(x => x.ToOrderNow).HasColumnType("int");
         builder.Property(x => x.Notes).HasMaxLength(2000);
         builder.Property(x => x.RowVersion).IsRowVersion();
 

@@ -631,8 +631,8 @@ Properties:
 Id
 ListId
 ProductId
-QuantityToOrder
-PendingQuantity
+TipicalOrder
+ToOrderNow
 Notes
 CreatedAt
 CreatedByUserId
@@ -655,9 +655,9 @@ UNIQUE(ListId, ProductId)
 
 This constraint is required in addition to API validation.
 
-## 13.2 QuantityToOrder
+## 13.2 TipicalOrder
 
-`QuantityToOrder` represents the amount the user intends to purchase.
+`TipicalOrder` represents the usual whole-number amount the user intends to purchase.
 
 The requirement explicitly permits:
 
@@ -667,34 +667,22 @@ The requirement explicitly permits:
 
 The API therefore must not reject negative values.
 
-A numeric SQL type should be used.
-
-Recommended:
-
-```text
-decimal(18,3)
-```
-
-This allows quantities such as:
+Use an integer SQL type. Negative values, zero, and positive values are all permitted:
 
 ```text
 1
 2
 0
 -1
-1.5
-0.250
 ```
 
-If the application later determines that quantities must always be whole numbers, the type can be changed to `int`.
+## 13.3 ToOrderNow
 
-## 13.3 PendingQuantity
+`ToOrderNow` represents the whole-number amount to purchase on the current shopping trip.
 
-`PendingQuantity` represents the amount still to be purchased.
+Use an integer SQL type. Zero and negative values are permitted, and the application must not automatically constrain it based on `TipicalOrder`.
 
-The same numeric type should be used as `QuantityToOrder`.
-
-The application must not automatically prevent a user from setting it above, below or equal to the ordered quantity unless a later business rule explicitly requires such validation.
+The application must not automatically prevent a user from setting it above, below or equal to `TipicalOrder` unless a later business rule explicitly requires such validation.
 
 This is important because the requirements explicitly permit negative quantities.
 
@@ -1396,8 +1384,8 @@ List must not be deleted
 Product cannot already exist in list
 Quantity may be zero
 Quantity may be negative
-PendingQuantity may be zero
-PendingQuantity may be negative
+ToOrderNow may be zero
+ToOrderNow may be negative
 ```
 
 ## ListShare
@@ -1581,10 +1569,10 @@ Actions
 A ListProduct should support:
 
 ```text
-QuantityToOrder
+TipicalOrder
     [Edit]
 
-PendingQuantity
+ToOrderNow
     [-]  3  [+]
 
 Notes
@@ -1594,9 +1582,9 @@ Notes
 The UI should visually distinguish:
 
 ```text
-PendingQuantity > 0
-PendingQuantity = 0
-PendingQuantity < 0
+ToOrderNow > 0
+ToOrderNow = 0
+ToOrderNow < 0
 ```
 
 without assuming that negative values are invalid.
@@ -1614,20 +1602,20 @@ The intended workflow is:
         ↓
 3. Add Products
         ↓
-4. Set QuantityToOrder
+4. Set TipicalOrder and ToOrderNow
         ↓
 5. Start shopping
         ↓
 6. Use + / - buttons
         ↓
-7. PendingQuantity changes
+7. ToOrderNow changes
         ↓
 8. Continue until shopping is complete
 ```
 
-`QuantityToOrder` is edited using an explicit edit operation.
+`TipicalOrder` is edited using an explicit edit operation.
 
-`PendingQuantity` is optimized for rapid interaction using `+` and `-` controls.
+`ToOrderNow` is optimized for rapid interaction using `+` and `-` controls.
 
 ---
 
@@ -2052,7 +2040,7 @@ SQL Server `rowversion` is suitable for this purpose and is supported directly b
 
 # 64. Special Concurrency Consideration for Shopping
 
-The `PendingQuantity` operation is especially sensitive because two users may be shopping simultaneously.
+The `ToOrderNow` operation is especially sensitive because two users may be shopping simultaneously.
 
 Example:
 
@@ -2781,7 +2769,7 @@ List creation
 List editing
 List detail
 Add product
-Edit QuantityToOrder
+Edit TipicalOrder
 Pending +/- controls
 Notes
 Immediate saving

@@ -18,11 +18,12 @@ public class ShoppingListSharingServiceTests
 
         var share = await service.CreateShareAsync(
             list.Id,
-            new ShareListRequest("user-b"),
+            new ShareListRequest("USER-B"),
             "user-a",
             isAdmin: false);
 
         Assert.Equal("user-b", share.UserId);
+        Assert.Equal("user-b", share.UserName);
         Assert.Equal("user-b@example.com", share.Email);
         Assert.Single(await service.GetSharesAsync(list.Id, "user-a", isAdmin: false));
         Assert.Contains((await service.GetListsAsync("user-b", isAdmin: false)), item => item.Id == list.Id);
@@ -30,11 +31,11 @@ public class ShoppingListSharingServiceTests
 
         var listProduct = await service.AddListProductAsync(
             list.Id,
-            new AddListProductRequest(product.Id, -1m, 0m, "shared note"),
+            new AddListProductRequest(product.Id, -1, 0, "shared note"),
             "user-b",
             isAdmin: false);
-        Assert.Equal(-1m, listProduct.QuantityToOrder);
-        Assert.Equal(0m, listProduct.PendingQuantity);
+        Assert.Equal(-1, listProduct.TipicalOrder);
+        Assert.Equal(0, listProduct.ToOrderNow);
         Assert.Equal("shared note", listProduct.Notes);
         Assert.Equal("Food", listProduct.ProductTypeName);
         Assert.Equal(2m, listProduct.ProductPrice);
@@ -108,13 +109,14 @@ public class ShoppingListSharingServiceTests
         ApplicationDbContext db)
     {
         db.Users.AddRange(
-            new ApplicationUser { Id = "user-a", UserName = "user-a", Email = "user-a@example.com" },
-            new ApplicationUser { Id = "user-b", UserName = "user-b", Email = "user-b@example.com" },
-            new ApplicationUser { Id = "user-c", UserName = "user-c", Email = "user-c@example.com" },
+            new ApplicationUser { Id = "user-a", UserName = "user-a", NormalizedUserName = "USER-A", Email = "user-a@example.com" },
+            new ApplicationUser { Id = "user-b", UserName = "user-b", NormalizedUserName = "USER-B", Email = "user-b@example.com" },
+            new ApplicationUser { Id = "user-c", UserName = "user-c", NormalizedUserName = "USER-C", Email = "user-c@example.com" },
             new ApplicationUser
             {
                 Id = "inactive-user",
                 UserName = "inactive-user",
+                NormalizedUserName = "INACTIVE-USER",
                 Email = "inactive@example.com",
                 IsActive = false
             });

@@ -17,6 +17,6 @@ public interface IShoppingListClient
     Task DeleteListProductAsync(int listId, int listProductId, string rowVersion);
 
     Task<IReadOnlyList<ListShareDto>> GetSharesAsync(int listId);
-    Task<ListShareDto> CreateShareAsync(int listId, string userId);
+    Task<ListShareDto> CreateShareAsync(int listId, string userName);
     Task RemoveShareAsync(int listId, string userId);
 }

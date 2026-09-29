@@ -90,11 +90,11 @@ public sealed class ShoppingListClient : IShoppingListClient
         return await response.Content.ReadFromJsonAsync<List<ListShareDto>>() ?? [];
     }
 
-    public async Task<ListShareDto> CreateShareAsync(int listId, string userId)
+    public async Task<ListShareDto> CreateShareAsync(int listId, string userName)
     {
         using var response = await _httpClient.PostAsJsonAsync(
             $"api/lists/{listId}/shares",
-            new ShareListRequest(userId));
+            new ShareListRequest(userName));
         await EnsureSuccessAsync(response);
         return await ReadRequiredAsync<ListShareDto>(response);
     }

@@ -54,8 +54,8 @@ public class ShoppingListClientTests
                       "productTypeId": 5,
                       "productTypeName": "Bakery",
                       "productPrice": 2.75,
-                      "quantityToOrder": -1,
-                      "pendingQuantity": 0,
+                      "tipicalOrder": -1,
+                      "toOrderNow": 0,
                       "notes": "Wholegrain",
                       "createdAt": "2026-01-01T00:00:00+00:00",
                       "updatedAt": "2026-01-01T00:00:00+00:00",
@@ -70,8 +70,8 @@ public class ShoppingListClientTests
         Assert.Equal("Bread", item.ProductName);
         Assert.Equal("Bakery", item.ProductTypeName);
         Assert.Equal(2.75m, item.ProductPrice);
-        Assert.Equal(-1m, item.QuantityToOrder);
-        Assert.Equal(0m, item.PendingQuantity);
+        Assert.Equal(-1, item.TipicalOrder);
+        Assert.Equal(0, item.ToOrderNow);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class ShoppingListClientTests
     }
 
     [Fact]
-    public async Task Create_share_posts_user_id_and_deserializes_share()
+    public async Task Create_share_posts_username_and_deserializes_share()
     {
         var handler = new StubHttpMessageHandler(request =>
         {
@@ -105,6 +105,7 @@ public class ShoppingListClientTests
                       "id": 3,
                       "listId": 9,
                       "userId": "user-b",
+                      "userName": "user-b",
                       "email": "user-b@example.com",
                       "createdAt": "2026-01-01T00:00:00+00:00"
                     }
@@ -117,7 +118,8 @@ public class ShoppingListClientTests
 
         Assert.Equal("/api/lists/9/shares", handler.LastRequestUri!.AbsolutePath);
         using var request = JsonDocument.Parse(handler.LastRequestBody!);
-        Assert.Equal("user-b", request.RootElement.GetProperty("userId").GetString());
+        Assert.Equal("user-b", request.RootElement.GetProperty("userName").GetString());
+        Assert.Equal("user-b", share.UserName);
         Assert.Equal("user-b@example.com", share.Email);
     }
 

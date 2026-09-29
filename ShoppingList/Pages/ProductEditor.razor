@@ -1,8 +1,10 @@
 @page "/products/new"
 @page "/products/{Id:int}/edit"
 @attribute [Authorize]
+@implements IAsyncDisposable
 @inject IProductCatalogClient Catalog
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>@(IsEdit ? "Edit product" : "Add product")</PageTitle>
 
@@ -63,13 +65,28 @@ else
         </div>
 
         <div class="mb-3">
-            <label class="form-label" for="product-picture">Picture (JPEG, PNG or WebP; max 5 MB)</label>
-            <InputFile id="product-picture" class="form-control" accept="image/jpeg,image/png,image/webp" OnChange="PictureChangedAsync" />
+            <label class="form-label" for="product-picture">Take a photo or choose a picture (JPEG, PNG or WebP; max 5 MB)</label>
+            <InputFile id="product-picture" class="form-control" accept="image/jpeg,image/png,image/webp"
+                       capture="environment" OnChange="PictureChangedAsync" />
+            <button class="btn btn-outline-primary mt-2" type="button" disabled="@isSaving"
+                    @onclick="StartCameraAsync">
+                Use camera
+            </button>
+            <div class="mt-3" hidden="@(!isCameraOpen)">
+                <video @ref="cameraPreview" class="catalog-editor-picture w-100" autoplay playsinline
+                       aria-label="Live camera preview"></video>
+                <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-primary" type="button" disabled="@isSaving"
+                            @onclick="CaptureCameraAsync">Take photo</button>
+                    <button class="btn btn-outline-secondary" type="button"
+                            @onclick="CloseCameraAsync">Close camera</button>
+                </div>
+            </div>
             @if (!string.IsNullOrWhiteSpace(model.PictureDataUrl))
             {
                 <div class="mt-3">
                     <img class="catalog-editor-picture" src="@model.PictureDataUrl" alt="Product picture preview" />
-                    <button class="btn btn-sm btn-outline-danger d-block mt-2" type="button" @onclick="RemovePicture">Remove picture</button>
+                    <button class="btn btn-sm btn-outline-danger d-block mt-2" type="button" @onclick="RemovePictureAsync">Remove picture</button>
                 </div>
             }
         </div>
@@ -95,12 +112,18 @@ else
     private ProductDto? originalProduct;
     private string? errorMessage;
     private string newProductTypeName = string.Empty;
+    private ElementReference cameraPreview;
+    private IJSObjectReference? cameraModule;
     private bool isLoading = true;
     private bool isSaving;
     private bool clearPicture;
+    private bool isCameraOpen;
 
     [Parameter]
     public int? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    public int? ReturnToListId { get; set; }
 
     private bool IsEdit => Id.HasValue;
 
@@ -153,6 +176,7 @@ else
 
     private async Task PictureChangedAsync(InputFileChangeEventArgs args)
     {
+        await StopCameraAsync();
         errorMessage = null;
         var file = args.File;
         if (file.Size > MaxPictureSize)
@@ -185,14 +209,77 @@ else
         }
     }
 
-    private void RemovePicture()
+    private async Task RemovePictureAsync()
     {
+        await StopCameraAsync();
         model.Picture = null;
         model.PictureContentType = null;
         model.PictureWidth = null;
         model.PictureHeight = null;
         model.PictureDataUrl = null;
         clearPicture = true;
+    }
+
+    private async Task StartCameraAsync()
+    {
+        errorMessage = null;
+        try
+        {
+            cameraModule ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "./js/product-camera.js");
+            await cameraModule.InvokeVoidAsync("startCamera", cameraPreview);
+            isCameraOpen = true;
+        }
+        catch (JSException ex)
+        {
+            errorMessage = ex.Message;
+            isCameraOpen = false;
+        }
+    }
+
+    private async Task CaptureCameraAsync()
+    {
+        if (cameraModule is null)
+        {
+            return;
+        }
+
+        errorMessage = null;
+        try
+        {
+            model.Picture = await cameraModule.InvokeAsync<byte[]>(
+                "captureCamera", cameraPreview, MaxPictureSize);
+            model.PictureContentType = "image/jpeg";
+            model.PictureWidth = null;
+            model.PictureHeight = null;
+            model.PictureDataUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(model.Picture)}";
+            clearPicture = false;
+            await StopCameraAsync();
+        }
+        catch (JSException ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task CloseCameraAsync()
+    {
+        await StopCameraAsync();
+    }
+
+    private async Task StopCameraAsync()
+    {
+        isCameraOpen = false;
+        if (cameraModule is not null)
+        {
+            try
+            {
+                await cameraModule.InvokeVoidAsync("stopCamera", cameraPreview);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
     }
 
     private async Task SaveAsync()
@@ -213,13 +300,15 @@ else
             if (IsEdit)
             {
                 await Catalog.UpdateProductAsync(Id!.Value, request);
+                Navigation.NavigateTo("/products");
             }
             else
             {
-                await Catalog.CreateProductAsync(request);
+                var createdProduct = await Catalog.CreateProductAsync(request);
+                Navigation.NavigateTo(ReturnToListId is int listId && listId > 0
+                    ? $"/lists/{listId}/products/new?createdProductId={createdProduct.Id}"
+                    : "/products");
             }
-
-            Navigation.NavigateTo("/products");
         }
         catch (CatalogApiException ex)
         {
@@ -284,5 +373,20 @@ else
         public int? PictureWidth { get; set; }
         public int? PictureHeight { get; set; }
         public string? PictureDataUrl { get; set; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (cameraModule is not null)
+        {
+            try
+            {
+                await cameraModule.InvokeVoidAsync("stopCamera", cameraPreview);
+                await cameraModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
     }
 }
