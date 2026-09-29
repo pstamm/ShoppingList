@@ -31,6 +31,7 @@ public class ShoppingListService : IShoppingListService
         var lists = await query
             .Include(list => list.ListProducts.Where(item => item.DeletedAt == null))
             .ThenInclude(item => item.Product)
+            .ThenInclude(product => product!.ProductType)
             .OrderBy(list => list.Name)
             .ToListAsync();
 
@@ -43,6 +44,7 @@ public class ShoppingListService : IShoppingListService
             .AsNoTracking()
             .Include(item => item.ListProducts.Where(product => product.DeletedAt == null))
             .ThenInclude(item => item.Product)
+            .ThenInclude(product => product!.ProductType)
             .FirstOrDefaultAsync(item => item.Id == listId && item.DeletedAt == null);
 
         if (list is null)
@@ -126,6 +128,7 @@ public class ShoppingListService : IShoppingListService
             .AsNoTracking()
             .Where(item => item.ListId == listId && item.DeletedAt == null)
             .Include(item => item.Product)
+            .ThenInclude(product => product!.ProductType)
             .OrderBy(item => item.Id)
             .ToListAsync();
         return items.Select(item => ToDto(item));
@@ -142,6 +145,7 @@ public class ShoppingListService : IShoppingListService
 
         var product = await _dbContext.Products
             .AsNoTracking()
+            .Include(value => value.ProductType)
             .FirstOrDefaultAsync(value => value.Id == request.ProductId && value.DeletedAt == null);
         if (product is null)
         {
@@ -175,7 +179,7 @@ public class ShoppingListService : IShoppingListService
 
         _dbContext.ListProducts.Add(item);
         await _dbContext.SaveChangesAsync();
-        return ToDto(item, product.Name);
+        return ToDto(item, product);
     }
 
     public async Task<ListProductDto> UpdateListProductAsync(
@@ -201,6 +205,7 @@ public class ShoppingListService : IShoppingListService
 
         var product = await _dbContext.Products
             .AsNoTracking()
+            .Include(value => value.ProductType)
             .FirstOrDefaultAsync(value => value.Id == request.ProductId && value.DeletedAt == null);
         if (product is null)
         {
@@ -228,7 +233,7 @@ public class ShoppingListService : IShoppingListService
         item.UpdatedByUserId = userId;
         await _dbContext.SaveChangesAsync();
 
-        return ToDto(item, product.Name);
+        return ToDto(item, product);
     }
 
     public async Task DeleteListProductAsync(
@@ -471,13 +476,17 @@ public class ShoppingListService : IShoppingListService
             Convert.ToBase64String(list.RowVersion));
     }
 
-    private static ListProductDto ToDto(ListProduct item, string? productName = null)
+    private static ListProductDto ToDto(ListProduct item, Product? product = null)
     {
+        product ??= item.Product;
         return new ListProductDto(
             item.Id,
             item.ListId,
             item.ProductId,
-            productName ?? item.Product?.Name ?? string.Empty,
+            product?.Name ?? string.Empty,
+            product?.ProductTypeId ?? 0,
+            product?.ProductType?.Name ?? string.Empty,
+            product?.Price ?? 0m,
             item.QuantityToOrder,
             item.PendingQuantity,
             item.Notes,

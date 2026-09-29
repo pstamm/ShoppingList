@@ -1,6 +1,6 @@
-namespace ShoppingApi.DTOs.ShoppingLists;
+namespace ShoppingList.Services.ShoppingLists;
 
-public record ShoppingListDto(
+public sealed record ShoppingListDto(
     int Id,
     string Name,
     string OwnerUserId,
@@ -9,11 +9,11 @@ public record ShoppingListDto(
     IReadOnlyList<ListProductDto> Products,
     string RowVersion);
 
-public record CreateShoppingListRequest(string Name);
+public sealed record CreateShoppingListRequest(string Name);
 
-public record UpdateShoppingListRequest(string Name, string RowVersion);
+public sealed record UpdateShoppingListRequest(string Name, string RowVersion);
 
-public record ListProductDto(
+public sealed record ListProductDto(
     int Id,
     int ListId,
     int ProductId,
@@ -28,24 +28,24 @@ public record ListProductDto(
     DateTimeOffset UpdatedAt,
     string RowVersion);
 
-public record AddListProductRequest(
+public sealed record AddListProductRequest(
     int ProductId,
     decimal QuantityToOrder,
     decimal PendingQuantity,
     string? Notes);
 
-public record UpdateListProductRequest(
+public sealed record UpdateListProductRequest(
     int ProductId,
     decimal QuantityToOrder,
     decimal PendingQuantity,
     string? Notes,
     string RowVersion);
 
-public record ListShareDto(
+public sealed record ListShareDto(
     int Id,
     int ListId,
     string UserId,
     string Email,
     DateTimeOffset CreatedAt);
 
-public record ShareListRequest(string UserId);
+public sealed record ShareListRequest(string UserId);

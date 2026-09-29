@@ -40,7 +40,19 @@ else
             <ValidationMessage For="() => model.ProductTypeId" />
             @if (productTypes.Count == 0)
             {
-                <div class="form-text">Create a product type before adding products.</div>
+                <div class="alert alert-info mt-2 mb-0">
+                    <div>Create a product type before saving this product.</div>
+                    <div class="input-group mt-2">
+                        <label class="visually-hidden" for="first-product-type">First product type name</label>
+                        <InputText id="first-product-type" class="form-control" @bind-Value="newProductTypeName"
+                                   placeholder="For example, Groceries" />
+                        <button class="btn btn-outline-primary" type="button"
+                                disabled="@(isSaving || string.IsNullOrWhiteSpace(newProductTypeName))"
+                                @onclick="CreateFirstProductTypeAsync">
+                            @(isSaving ? "Creating..." : "Create product type")
+                        </button>
+                    </div>
+                </div>
             }
         </div>
 
@@ -68,7 +80,7 @@ else
         }
 
         <div class="d-flex gap-2">
-            <button class="btn btn-primary" type="submit" disabled="@isSaving || productTypes.Count == 0">
+            <button class="btn btn-primary" type="submit" disabled="@(isSaving || productTypes.Count == 0)">
                 @(isSaving ? "Saving..." : "Save")
             </button>
             <a class="btn btn-outline-secondary" href="/products">Cancel</a>
@@ -82,6 +94,7 @@ else
     private IReadOnlyList<ProductTypeDto> productTypes = [];
     private ProductDto? originalProduct;
     private string? errorMessage;
+    private string newProductTypeName = string.Empty;
     private bool isLoading = true;
     private bool isSaving;
     private bool clearPicture;
@@ -215,6 +228,31 @@ else
         catch (HttpRequestException)
         {
             errorMessage = "The product could not be saved because the API could not be reached.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task CreateFirstProductTypeAsync()
+    {
+        errorMessage = null;
+        isSaving = true;
+        try
+        {
+            var productType = await Catalog.CreateProductTypeAsync(newProductTypeName.Trim());
+            productTypes = [productType, .. productTypes];
+            model.ProductTypeId = productType.Id;
+            newProductTypeName = string.Empty;
+        }
+        catch (CatalogApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The product type could not be created because the API could not be reached.";
         }
         finally
         {

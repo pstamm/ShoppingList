@@ -1,0 +1,682 @@
+@page "/lists/{Id:int}"
+@attribute [Authorize]
+@inject IShoppingListClient Lists
+@inject IProductCatalogClient Catalog
+@inject AuthenticationStateProvider AuthenticationState
+
+<PageTitle>@(shoppingList?.Name ?? "Shopping list")</PageTitle>
+
+<a href="/lists" class="btn btn-link px-0">&larr; All lists</a>
+
+@if (isLoading)
+{
+    <p role="status">Loading shopping list...</p>
+}
+else if (shoppingList is null)
+{
+    <h1>Shopping list unavailable</h1>
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@errorMessage</div>
+    }
+}
+else
+{
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        @if (isEditingName)
+        {
+            <div class="d-flex gap-2">
+                <InputText class="form-control" aria-label="List name" @bind-Value="editingName" />
+                <button class="btn btn-primary" @onclick="SaveListNameAsync" disabled="@isSavingListName">Save</button>
+                <button class="btn btn-outline-secondary" @onclick="CancelListNameEdit">Cancel</button>
+            </div>
+        }
+        else
+        {
+            <h1 class="mb-0">@shoppingList.Name</h1>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="BeginListNameEdit">Rename list</button>
+                @if (canManageShares)
+                {
+                    <a class="btn btn-outline-secondary" href="@($"/lists/{Id}/share")">Sharing</a>
+                }
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@errorMessage</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <div class="alert alert-info" role="status">@statusMessage</div>
+    }
+
+    <section class="card mb-4" aria-labelledby="add-product-heading">
+        <div class="card-body">
+            <h2 id="add-product-heading" class="h5">Add a product</h2>
+            @if (products.Count == 0)
+            {
+                <p class="mb-0">Create a product in the <a href="/products">catalogue</a> first.</p>
+            }
+            else
+            {
+                <div class="row g-2 align-items-end">
+                    <div class="col-lg-5">
+                        <label class="form-label" for="add-product">Product</label>
+                        <InputSelect id="add-product" class="form-select" @bind-Value="newProductId">
+                            <option value="0">Select a product</option>
+                            @foreach (var product in products)
+                            {
+                                <option value="@product.Id">@product.Name (@product.Price.ToString("C"))</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="col-sm-4 col-lg-2">
+                        <label class="form-label" for="new-quantity">Quantity to order</label>
+                        <InputNumber id="new-quantity" class="form-control" @bind-Value="newQuantity" step="0.001" />
+                    </div>
+                    <div class="col-sm-4 col-lg-2">
+                        <label class="form-label" for="new-pending">Pending quantity</label>
+                        <InputNumber id="new-pending" class="form-control" @bind-Value="newPending" step="0.001" />
+                    </div>
+                    <div class="col-sm-4 col-lg-3">
+                        <label class="form-label" for="new-notes">Notes</label>
+                        <InputText id="new-notes" class="form-control" @bind-Value="newNotes" />
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-primary" @onclick="AddProductAsync" disabled="@isAddingProduct">@(isAddingProduct ? "Adding..." : "Add product")</button>
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+
+    @if (items.Count == 0)
+    {
+        <p>This list is empty. Add a product to get started.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Product</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="text-end">Price</th>
+                        <th scope="col">Quantity to order</th>
+                        <th scope="col">Pending</th>
+                        <th scope="col">Notes</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr @key="item.Id">
+                            <td>@item.ProductName</td>
+                            <td>@item.ProductTypeName</td>
+                            <td class="text-end">@item.ProductPrice.ToString("C")</td>
+                            <td>
+                                @if (editingItemId == item.Id)
+                                {
+                                    <InputNumber class="form-control quantity-input" aria-label="Quantity to order" @bind-Value="editQuantity" step="0.001" />
+                                }
+                                else
+                                {
+                                    @item.QuantityToOrder
+                                }
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <button class="btn btn-sm btn-outline-secondary" aria-label="@($"Decrease {item.ProductName} pending quantity")" @onclick="() => ChangePendingAsync(item, -1m)" disabled="@item.IsSaving && !item.PendingSaveRunning">-</button>
+                                    <span class="@PendingClass(item.PendingQuantity)" aria-live="polite">@item.PendingQuantity</span>
+                                    <button class="btn btn-sm btn-outline-secondary" aria-label="@($"Increase {item.ProductName} pending quantity")" @onclick="() => ChangePendingAsync(item, 1m)" disabled="@item.IsSaving && !item.PendingSaveRunning">+</button>
+                                </div>
+                            </td>
+                            <td>
+                                @if (editingItemId == item.Id)
+                                {
+                                    <InputText class="form-control" aria-label="Product notes" @bind-Value="editNotes" />
+                                }
+                                else if (string.IsNullOrWhiteSpace(item.Notes))
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                                else
+                                {
+                                    @item.Notes
+                                }
+                            </td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1">
+                                    @if (editingItemId == item.Id)
+                                    {
+                                        <button class="btn btn-sm btn-primary" @onclick="() => SaveItemEditAsync(item)" disabled="@item.IsSaving">Save</button>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="CancelItemEdit" disabled="@item.IsSaving">Cancel</button>
+                                    }
+                                    else if (deletingItemId == item.Id)
+                                    {
+                                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteItemAsync(item)" disabled="@item.IsSaving">Confirm delete</button>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="CancelItemDelete">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => BeginItemEdit(item)" disabled="@item.IsSaving">Edit quantity/notes</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => BeginItemDelete(item)" disabled="@item.IsSaving">Delete</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private readonly List<ListProductRow> items = [];
+    private IReadOnlyList<ProductDto> products = [];
+    private ShoppingListDto? shoppingList;
+    private string? errorMessage;
+    private string? statusMessage;
+    private string editingName = string.Empty;
+    private string? newNotes;
+    private string? editNotes;
+    private decimal newQuantity = 1m;
+    private decimal newPending = 1m;
+    private decimal editQuantity;
+    private int newProductId;
+    private int? editingItemId;
+    private int? deletingItemId;
+    private bool isLoading = true;
+    private bool isAddingProduct;
+    private bool isEditingName;
+    private bool isSavingListName;
+    private bool canManageShares;
+    private string? currentUserId;
+    private bool isAdmin;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var authenticationState = await AuthenticationState.GetAuthenticationStateAsync();
+        currentUserId = authenticationState.User.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        isAdmin = authenticationState.User.IsInRole("Admin");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            var listTask = Lists.GetListAsync(Id);
+            var productsTask = Catalog.GetProductsAsync(null, null);
+            await Task.WhenAll(listTask, productsTask);
+            shoppingList = await listTask;
+            products = await productsTask;
+            canManageShares = isAdmin ||
+                (!string.IsNullOrWhiteSpace(currentUserId) && shoppingList.OwnerUserId == currentUserId);
+            await LoadItemsAsync();
+        }
+        catch (ShoppingListApiException ex)
+        {
+            shoppingList = null;
+            items.Clear();
+            errorMessage = ex.Message;
+        }
+        catch (CatalogApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The shopping list could not be loaded because the API could not be reached.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadItemsAsync()
+    {
+        var loaded = await Lists.GetListProductsAsync(Id);
+        items.Clear();
+        items.AddRange(loaded.Select(item => new ListProductRow(item)));
+        if (shoppingList is not null)
+        {
+            shoppingList = shoppingList with { Products = loaded };
+        }
+    }
+
+    private void BeginListNameEdit()
+    {
+        errorMessage = null;
+        isEditingName = true;
+        editingName = shoppingList?.Name ?? string.Empty;
+    }
+
+    private void CancelListNameEdit()
+    {
+        isEditingName = false;
+        editingName = string.Empty;
+    }
+
+    private async Task SaveListNameAsync()
+    {
+        if (shoppingList is null || string.IsNullOrWhiteSpace(editingName))
+        {
+            errorMessage = "List name is required.";
+            return;
+        }
+
+        isSavingListName = true;
+        errorMessage = null;
+        try
+        {
+            var updated = await Lists.UpdateListAsync(shoppingList.Id, editingName, shoppingList.RowVersion);
+            shoppingList = shoppingList with
+            {
+                Name = updated.Name,
+                UpdatedAt = updated.UpdatedAt,
+                RowVersion = updated.RowVersion
+            };
+            isEditingName = false;
+            statusMessage = "List name saved.";
+        }
+        catch (ShoppingListApiException ex)
+        {
+            errorMessage = ex.Message;
+            if (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                await ReloadAfterConflictAsync();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The list name could not be saved because the API could not be reached.";
+        }
+        finally
+        {
+            isSavingListName = false;
+        }
+    }
+
+    private async Task AddProductAsync()
+    {
+        if (newProductId <= 0)
+        {
+            errorMessage = "Select a product to add.";
+            return;
+        }
+
+        errorMessage = null;
+        statusMessage = null;
+        isAddingProduct = true;
+        try
+        {
+            var added = await Lists.AddListProductAsync(
+                Id,
+                new AddListProductRequest(newProductId, newQuantity, newPending, newNotes));
+            items.Add(new ListProductRow(added));
+            SyncListProducts();
+            newProductId = 0;
+            newQuantity = 1m;
+            newPending = 1m;
+            newNotes = null;
+            statusMessage = "Product added.";
+        }
+        catch (ShoppingListApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The product could not be added because the API could not be reached.";
+        }
+        finally
+        {
+            isAddingProduct = false;
+        }
+    }
+
+    private void BeginItemEdit(ListProductRow item)
+    {
+        errorMessage = null;
+        statusMessage = null;
+        editingItemId = item.Id;
+        deletingItemId = null;
+        editQuantity = item.QuantityToOrder;
+        editNotes = item.Notes;
+    }
+
+    private void CancelItemEdit()
+    {
+        editingItemId = null;
+        editNotes = null;
+    }
+
+    private async Task SaveItemEditAsync(ListProductRow item)
+    {
+        if (editNotes?.Length > 2000)
+        {
+            errorMessage = "Notes cannot exceed 2000 characters.";
+            return;
+        }
+
+        var oldQuantity = item.QuantityToOrder;
+        var oldNotes = item.Notes;
+        item.QuantityToOrder = editQuantity;
+        item.Notes = editNotes;
+        item.IsSaving = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            var updated = await UpdateItemAsync(item, item.PendingQuantity);
+            ApplyServerItem(item, updated);
+            editingItemId = null;
+            statusMessage = "Product changes saved.";
+        }
+        catch (ShoppingListApiException ex)
+        {
+            item.QuantityToOrder = oldQuantity;
+            item.Notes = oldNotes;
+            errorMessage = ex.Message;
+            if (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                await ReloadItemAfterConflictAsync(item.Id);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            item.QuantityToOrder = oldQuantity;
+            item.Notes = oldNotes;
+            errorMessage = "Product changes could not be saved because the API could not be reached.";
+        }
+        finally
+        {
+            item.IsSaving = false;
+            SyncListProducts();
+        }
+    }
+
+    private async Task ChangePendingAsync(ListProductRow item, decimal change)
+    {
+        if (item.IsSaving && !item.PendingSaveRunning)
+        {
+            return;
+        }
+
+        errorMessage = null;
+        statusMessage = null;
+        item.PendingQuantity += change;
+        item.PendingSaveRequested = true;
+        if (item.PendingSaveRunning)
+        {
+            return;
+        }
+
+        item.PendingSaveRunning = true;
+        try
+        {
+            while (item.PendingSaveRequested)
+            {
+                item.PendingSaveRequested = false;
+                var target = item.PendingQuantity;
+                item.IsSaving = true;
+                try
+                {
+                    var updated = await UpdateItemAsync(item, target);
+                    var queuedTarget = item.PendingQuantity;
+                    ApplyServerItem(item, updated);
+                    if (item.PendingSaveRequested)
+                    {
+                        item.PendingQuantity = queuedTarget;
+                    }
+                }
+                catch (ShoppingListApiException ex)
+                {
+                    item.PendingSaveRequested = false;
+                    errorMessage = ex.Message;
+                    if (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+                    {
+                        await ReloadItemAfterConflictAsync(item.Id);
+                    }
+                    else
+                    {
+                        item.PendingQuantity = item.SavedPendingQuantity;
+                    }
+                }
+                catch (HttpRequestException)
+                {
+                    item.PendingSaveRequested = false;
+                    item.PendingQuantity = item.SavedPendingQuantity;
+                    errorMessage = "Pending quantity could not be saved. The previous value has been restored.";
+                }
+                finally
+                {
+                    item.IsSaving = false;
+                    SyncListProducts();
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(errorMessage))
+            {
+                statusMessage = "Pending quantity saved.";
+            }
+        }
+        finally
+        {
+            item.PendingSaveRunning = false;
+        }
+    }
+
+    private void BeginItemDelete(ListProductRow item)
+    {
+        errorMessage = null;
+        statusMessage = null;
+        deletingItemId = item.Id;
+        editingItemId = null;
+    }
+
+    private void CancelItemDelete()
+    {
+        deletingItemId = null;
+    }
+
+    private async Task DeleteItemAsync(ListProductRow item)
+    {
+        errorMessage = null;
+        statusMessage = null;
+        item.IsSaving = true;
+        try
+        {
+            await Lists.DeleteListProductAsync(Id, item.Id, item.RowVersion);
+            items.Remove(item);
+            deletingItemId = null;
+            SyncListProducts();
+            statusMessage = "Product removed from the list.";
+        }
+        catch (ShoppingListApiException ex)
+        {
+            errorMessage = ex.Message;
+            deletingItemId = null;
+            if (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                await ReloadItemAfterConflictAsync(item.Id);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The product could not be removed because the API could not be reached.";
+        }
+        finally
+        {
+            item.IsSaving = false;
+        }
+    }
+
+    private Task<ListProductDto> UpdateItemAsync(ListProductRow item, decimal pendingQuantity)
+    {
+        return Lists.UpdateListProductAsync(
+            Id,
+            item.Id,
+            new UpdateListProductRequest(
+                item.ProductId,
+                item.QuantityToOrder,
+                pendingQuantity,
+                item.Notes,
+                item.RowVersion));
+    }
+
+    private static void ApplyServerItem(ListProductRow item, ListProductDto updated)
+    {
+        item.ProductName = updated.ProductName;
+        item.ProductTypeName = updated.ProductTypeName;
+        item.ProductPrice = updated.ProductPrice;
+        item.QuantityToOrder = updated.QuantityToOrder;
+        item.PendingQuantity = updated.PendingQuantity;
+        item.SavedPendingQuantity = updated.PendingQuantity;
+        item.Notes = updated.Notes;
+        item.RowVersion = updated.RowVersion;
+    }
+
+    private async Task ReloadItemAfterConflictAsync(int itemId)
+    {
+        try
+        {
+            var currentItems = await Lists.GetListProductsAsync(Id);
+            var current = currentItems.FirstOrDefault(value => value.Id == itemId);
+            var row = items.FirstOrDefault(value => value.Id == itemId);
+            if (current is null)
+            {
+                if (row is not null)
+                {
+                    items.Remove(row);
+                }
+            }
+            else if (row is not null)
+            {
+                ApplyServerItem(row, current);
+            }
+            else
+            {
+                items.Add(new ListProductRow(current));
+            }
+
+            SyncListProducts();
+            statusMessage = "This product changed elsewhere. The latest server values have been loaded.";
+        }
+        catch (ShoppingListApiException ex)
+        {
+            errorMessage = $"{errorMessage} Could not reload the latest product: {ex.Message}";
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = $"{errorMessage} Could not reload the latest product because the API is unavailable.";
+        }
+    }
+
+    private async Task ReloadAfterConflictAsync()
+    {
+        try
+        {
+            shoppingList = await Lists.GetListAsync(Id);
+            await LoadItemsAsync();
+            statusMessage = "The list changed elsewhere. The latest values have been loaded.";
+        }
+        catch (Exception ex) when (ex is ShoppingListApiException or HttpRequestException)
+        {
+            errorMessage = $"{errorMessage} Could not reload the latest list.";
+        }
+    }
+
+    private void SyncListProducts()
+    {
+        if (shoppingList is not null)
+        {
+            shoppingList = shoppingList with
+            {
+                Products = items.Select(item => item.ToDto()).ToList()
+            };
+        }
+    }
+
+    private static string PendingClass(decimal quantity)
+    {
+        return quantity switch
+        {
+            > 0 => "pending-quantity pending-quantity-positive",
+            < 0 => "pending-quantity pending-quantity-negative",
+            _ => "pending-quantity pending-quantity-zero"
+        };
+    }
+
+    private sealed class ListProductRow
+    {
+        public ListProductRow(ListProductDto item)
+        {
+            Id = item.Id;
+            ListId = item.ListId;
+            ProductId = item.ProductId;
+            ProductName = item.ProductName;
+            ProductTypeId = item.ProductTypeId;
+            ProductTypeName = item.ProductTypeName;
+            ProductPrice = item.ProductPrice;
+            QuantityToOrder = item.QuantityToOrder;
+            PendingQuantity = item.PendingQuantity;
+            SavedPendingQuantity = item.PendingQuantity;
+            Notes = item.Notes;
+            CreatedAt = item.CreatedAt;
+            UpdatedAt = item.UpdatedAt;
+            RowVersion = item.RowVersion;
+        }
+
+        public int Id { get; }
+        public int ListId { get; }
+        public int ProductId { get; }
+        public string ProductName { get; set; }
+        public int ProductTypeId { get; }
+        public string ProductTypeName { get; set; }
+        public decimal ProductPrice { get; set; }
+        public decimal QuantityToOrder { get; set; }
+        public decimal PendingQuantity { get; set; }
+        public decimal SavedPendingQuantity { get; set; }
+        public string? Notes { get; set; }
+        public DateTimeOffset CreatedAt { get; }
+        public DateTimeOffset UpdatedAt { get; }
+        public string RowVersion { get; set; }
+        public bool IsSaving { get; set; }
+        public bool PendingSaveRunning { get; set; }
+        public bool PendingSaveRequested { get; set; }
+
+        public ListProductDto ToDto()
+        {
+            return new ListProductDto(
+                Id,
+                ListId,
+                ProductId,
+                ProductName,
+                ProductTypeId,
+                ProductTypeName,
+                ProductPrice,
+                QuantityToOrder,
+                PendingQuantity,
+                Notes,
+                CreatedAt,
+                UpdatedAt,
+                RowVersion);
+        }
+    }
+}

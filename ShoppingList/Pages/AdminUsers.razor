@@ -1,0 +1,264 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
+@inject IAdminUserClient Users
+
+<PageTitle>User management</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>User management</h1>
+    <a class="btn btn-outline-secondary" href="/admin">Administration</a>
+</div>
+
+<h2 class="h4">Create user</h2>
+<EditForm Model="createModel" OnValidSubmit="CreateAsync" FormName="create-admin-user" class="row g-3 mb-4">
+    <DataAnnotationsValidator />
+    <div class="col-md-4">
+        <label class="form-label" for="new-user-email">Email</label>
+        <InputText id="new-user-email" type="email" class="form-control" @bind-Value="createModel.Email" />
+        <ValidationMessage For="() => createModel.Email" />
+    </div>
+    <div class="col-md-4">
+        <label class="form-label" for="new-user-password">Temporary password</label>
+        <InputText id="new-user-password" type="password" class="form-control" @bind-Value="createModel.Password" />
+        <ValidationMessage For="() => createModel.Password" />
+    </div>
+    <div class="col-md-4 align-self-end">
+        <div class="form-check mb-2">
+            <InputCheckbox id="new-user-admin" class="form-check-input" @bind-Value="createModel.IsAdmin" />
+            <label class="form-check-label" for="new-user-admin">Administrator</label>
+        </div>
+        <button class="btn btn-primary" type="submit" disabled="@isSaving">Create user</button>
+    </div>
+</EditForm>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success")" role="@(isError ? "alert" : "status")">@message</div>
+}
+
+<h2 class="h4">Users</h2>
+@if (isLoading)
+{
+    <p role="status">Loading users...</p>
+}
+else if (users.Count == 0)
+{
+    <p>No users have been created.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Email</th>
+                    <th scope="col">Roles</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Created</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in users)
+                {
+                    <tr @key="user.Id">
+                        <td>@user.Email</td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="form-check">
+                                    <input id="@($"user-{user.Id}-role-user")"
+                                           class="form-check-input"
+                                           type="checkbox"
+                                           checked="@user.SelectedRoles.Contains("User")"
+                                           @onchange="args => SetUserRole(user, args)" />
+                                    <label class="form-check-label" for="@($"user-{user.Id}-role-user")">User</label>
+                                </div>
+                                <div class="form-check">
+                                    <input id="@($"user-{user.Id}-role-admin")"
+                                           class="form-check-input"
+                                           type="checkbox"
+                                           checked="@user.SelectedRoles.Contains("Admin")"
+                                           @onchange="args => SetAdminRole(user, args)" />
+                                    <label class="form-check-label" for="@($"user-{user.Id}-role-admin")">Admin</label>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge @(user.IsActive ? "text-bg-success" : "text-bg-secondary")">
+                                @(user.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>@user.CreatedAt.ToLocalTime().ToString("d")</td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-sm btn-outline-primary"
+                                        disabled="@(isSaving || user.SelectedRoles.Count == 0)"
+                                        @onclick="() => SaveRolesAsync(user)">Save roles</button>
+                                @if (user.ConfirmingStatusChange)
+                                {
+                                    <button class="btn btn-sm btn-danger" disabled="@isSaving"
+                                            @onclick="() => SetStatusAsync(user, !user.IsActive)">
+                                        Confirm @(user.IsActive ? "deactivation" : "activation")
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => user.ConfirmingStatusChange = false">Cancel</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary" disabled="@isSaving"
+                                            @onclick="() => user.ConfirmingStatusChange = true">
+                                        @(user.IsActive ? "Deactivate" : "Activate")
+                                    </button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="form-text">At least one role must remain assigned. The last active administrator cannot be demoted or deactivated.</p>
+}
+
+@code {
+    private readonly CreateUserForm createModel = new();
+    private List<EditableUser> users = [];
+    private string? message;
+    private bool isError;
+    private bool isLoading = true;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        try
+        {
+            users = (await Users.GetUsersAsync())
+                .Select(user => new EditableUser(user))
+                .ToList();
+        }
+        catch (AdminUserApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+        catch (HttpRequestException)
+        {
+            ShowError("The user-management service could not be reached.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        await RunAsync(async () =>
+        {
+            await Users.CreateUserAsync(new CreateAdminUserRequest(
+                createModel.Email.Trim(),
+                createModel.Password,
+                createModel.IsAdmin ? ["User", "Admin"] : ["User"]));
+            createModel.Email = string.Empty;
+            createModel.Password = string.Empty;
+            createModel.IsAdmin = false;
+        });
+    }
+
+    private static void SetRole(EditableUser user, string role, ChangeEventArgs args)
+    {
+        if (args.Value is bool isSelected)
+        {
+            if (isSelected && !user.SelectedRoles.Contains(role))
+            {
+                user.SelectedRoles.Add(role);
+            }
+            else if (!isSelected)
+            {
+                user.SelectedRoles.Remove(role);
+            }
+        }
+    }
+
+    private static void SetUserRole(EditableUser user, ChangeEventArgs args) =>
+        SetRole(user, "User", args);
+
+    private static void SetAdminRole(EditableUser user, ChangeEventArgs args) =>
+        SetRole(user, "Admin", args);
+
+    private async Task SaveRolesAsync(EditableUser user)
+    {
+        await RunAsync(async () =>
+        {
+            await Users.UpdateRolesAsync(user.Id, new UpdateUserRolesRequest(user.SelectedRoles));
+        });
+    }
+
+    private async Task SetStatusAsync(EditableUser user, bool isActive)
+    {
+        if (await RunAsync(async () =>
+            await Users.UpdateStatusAsync(user.Id, new UpdateUserStatusRequest(isActive))))
+        {
+            user.ConfirmingStatusChange = false;
+        }
+    }
+
+    private async Task<bool> RunAsync(Func<Task> action)
+    {
+        message = null;
+        isSaving = true;
+        try
+        {
+            await action();
+            isError = false;
+            message = "User changes saved.";
+            await LoadAsync();
+            return true;
+        }
+        catch (AdminUserApiException ex)
+        {
+            ShowError(ex.Message);
+            return false;
+        }
+        catch (HttpRequestException)
+        {
+            ShowError("The operation could not be completed because the API could not be reached.");
+            return false;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ShowError(string error)
+    {
+        isError = true;
+        message = error;
+    }
+
+    private sealed class EditableUser(AdminUserDto user)
+    {
+        public string Id { get; } = user.Id;
+        public string Email { get; } = user.Email;
+        public bool IsActive { get; set; } = user.IsActive;
+        public DateTimeOffset CreatedAt { get; } = user.CreatedAt;
+        public List<string> SelectedRoles { get; } = [.. user.Roles];
+        public bool ConfirmingStatusChange { get; set; }
+    }
+
+    private sealed class CreateUserForm
+    {
+        [Required, EmailAddress, StringLength(256)]
+        public string Email { get; set; } = string.Empty;
+
+        [Required, MinLength(8)]
+        public string Password { get; set; } = string.Empty;
+
+        public bool IsAdmin { get; set; }
+    }
+}

@@ -1,0 +1,22 @@
+@page "/admin"
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Administration</PageTitle>
+
+<h1>Administration</h1>
+<p>Manage users, the shared product catalogue, and shopping lists across the application.</p>
+
+<div class="list-group">
+    <a class="list-group-item list-group-item-action" href="/admin/users">
+        <strong>User management</strong>
+        <div class="text-body-secondary">Create accounts, assign roles, and activate or deactivate users.</div>
+    </a>
+    <a class="list-group-item list-group-item-action" href="/products">
+        <strong>Global product catalogue</strong>
+        <div class="text-body-secondary">Manage products available to every shopping list.</div>
+    </a>
+    <a class="list-group-item list-group-item-action" href="/lists">
+        <strong>Global shopping lists</strong>
+        <div class="text-body-secondary">View and manage all users' shopping lists.</div>
+    </a>
+</div>

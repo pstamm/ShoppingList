@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using ShoppingList;
 using ShoppingList.Services.Catalog;
 using ShoppingList.Services.Authentication;
+using ShoppingList.Services.Admin;
+using ShoppingList.Services.ShoppingLists;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -29,5 +31,7 @@ builder.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.Authent
     sp.GetRequiredService<JwtAuthenticationStateProvider>());
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IProductCatalogClient, ProductCatalogClient>();
+builder.Services.AddScoped<IAdminUserClient, AdminUserClient>();
+builder.Services.AddScoped<IShoppingListClient, ShoppingListClient>();
 
 await builder.Build().RunAsync();

@@ -25,7 +25,8 @@ public class AuthBootstrapper : IAuthBootstrapper
         {
             if (!await _roleManager.RoleExistsAsync(roleName))
             {
-                await _roleManager.CreateAsync(new IdentityRole(roleName));
+                var result = await _roleManager.CreateAsync(new IdentityRole(roleName));
+                EnsureSucceeded(result, $"creating role '{roleName}'");
             }
         }
 
@@ -51,15 +52,22 @@ public class AuthBootstrapper : IAuthBootstrapper
             };
 
             var createResult = await _userManager.CreateAsync(adminUser, adminPassword);
-            if (!createResult.Succeeded)
-            {
-                return;
-            }
+            EnsureSucceeded(createResult, "creating the configured administrator account");
         }
 
         if (!await _userManager.IsInRoleAsync(adminUser, "Admin"))
         {
-            await _userManager.AddToRoleAsync(adminUser, "Admin");
+            var result = await _userManager.AddToRoleAsync(adminUser, "Admin");
+            EnsureSucceeded(result, "assigning the configured administrator role");
+        }
+    }
+
+    private static void EnsureSucceeded(IdentityResult result, string operation)
+    {
+        if (!result.Succeeded)
+        {
+            var errors = string.Join("; ", result.Errors.Select(error => error.Description));
+            throw new InvalidOperationException($"Identity failed while {operation}: {errors}");
         }
     }
 }

@@ -13,6 +13,7 @@ namespace ShoppingApi.Services.Products;
 
 public class ProductCatalogService : IProductCatalogService
 {
+    private const decimal MaximumProductPrice = 9_999_999_999_999_999.99m;
     private readonly ApplicationDbContext _dbContext;
     private readonly IConfiguration _configuration;
 
@@ -53,12 +54,7 @@ public class ProductCatalogService : IProductCatalogService
 
     public async Task<ProductTypeDto> CreateProductTypeAsync(CreateProductTypeRequest request, string userId)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-        {
-            throw new ValidationException("Product type name is required.");
-        }
-
-        var normalizedName = request.Name.Trim();
+        var normalizedName = NormalizeProductTypeName(request.Name);
         var exists = await _dbContext.ProductTypes
             .AnyAsync(x => x.Name == normalizedName && x.DeletedAt == null);
 
@@ -90,11 +86,7 @@ public class ProductCatalogService : IProductCatalogService
             throw new KeyNotFoundException("Product type was not found.");
         }
 
-        var normalizedName = request.Name.Trim();
-        if (string.IsNullOrWhiteSpace(normalizedName))
-        {
-            throw new ValidationException("Product type name is required.");
-        }
+        var normalizedName = NormalizeProductTypeName(request.Name);
 
         var nameExists = await _dbContext.ProductTypes
             .AnyAsync(x => x.Id != id && x.Name == normalizedName && x.DeletedAt == null);
@@ -192,20 +184,14 @@ public class ProductCatalogService : IProductCatalogService
 
     public async Task<ProductDto> CreateProductAsync(CreateProductRequest request, string userId)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-        {
-            throw new ValidationException("Product name is required.");
-        }
+        var productName = NormalizeProductName(request.Name);
 
         if (request.ProductTypeId <= 0)
         {
             throw new ValidationException("A valid product type is required.");
         }
 
-        if (request.Price < 0)
-        {
-            throw new ValidationException("Product price cannot be negative.");
-        }
+        ValidatePrice(request.Price);
 
         var productTypeExists = await _dbContext.ProductTypes
             .AnyAsync(x => x.Id == request.ProductTypeId && x.DeletedAt == null);
@@ -216,7 +202,7 @@ public class ProductCatalogService : IProductCatalogService
         }
 
         var nameExists = await _dbContext.Products
-            .AnyAsync(x => x.Name == request.Name.Trim() && x.DeletedAt == null);
+            .AnyAsync(x => x.Name == productName && x.DeletedAt == null);
 
         if (nameExists)
         {
@@ -227,7 +213,7 @@ public class ProductCatalogService : IProductCatalogService
 
         var entity = new Product
         {
-            Name = request.Name.Trim(),
+            Name = productName,
             ProductTypeId = request.ProductTypeId,
             Price = request.Price,
             Picture = preparedPicture.picture,
@@ -265,20 +251,14 @@ public class ProductCatalogService : IProductCatalogService
             throw new KeyNotFoundException("Product was not found.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Name))
-        {
-            throw new ValidationException("Product name is required.");
-        }
+        var productName = NormalizeProductName(request.Name);
 
         if (request.ProductTypeId <= 0)
         {
             throw new ValidationException("A valid product type is required.");
         }
 
-        if (request.Price < 0)
-        {
-            throw new ValidationException("Product price cannot be negative.");
-        }
+        ValidatePrice(request.Price);
 
         var productTypeExists = await _dbContext.ProductTypes
             .AnyAsync(x => x.Id == request.ProductTypeId && x.DeletedAt == null);
@@ -289,7 +269,7 @@ public class ProductCatalogService : IProductCatalogService
         }
 
         var nameExists = await _dbContext.Products
-            .AnyAsync(x => x.Id != id && x.Name == request.Name.Trim() && x.DeletedAt == null);
+            .AnyAsync(x => x.Id != id && x.Name == productName && x.DeletedAt == null);
 
         if (nameExists)
         {
@@ -298,7 +278,7 @@ public class ProductCatalogService : IProductCatalogService
 
         var preparedPicture = await PreparePictureAsync(request.Picture, request.PictureContentType);
 
-        entity.Name = request.Name.Trim();
+        entity.Name = productName;
         entity.ProductTypeId = request.ProductTypeId;
         entity.Price = request.Price;
         entity.Picture = preparedPicture.picture;
@@ -359,6 +339,11 @@ public class ProductCatalogService : IProductCatalogService
         }
 
         var maxUploadBytes = _configuration.GetValue<int?>("Image:MaxUploadSizeBytes") ?? 5 * 1024 * 1024;
+        if (maxUploadBytes <= 0)
+        {
+            throw new InvalidOperationException("Image:MaxUploadSizeBytes must be greater than zero.");
+        }
+
         if (picture.Length > maxUploadBytes)
         {
             throw new ValidationException("The uploaded image exceeds the configured size limit.");
@@ -371,27 +356,95 @@ public class ProductCatalogService : IProductCatalogService
             throw new ValidationException("Only JPEG, PNG, and WebP images are supported.");
         }
 
-        using var image = await Image.LoadAsync(new MemoryStream(picture));
-
         var targetWidth = _configuration.GetValue<int?>("Image:Width") ?? 400;
         var targetHeight = _configuration.GetValue<int?>("Image:Height") ?? 400;
         var quality = _configuration.GetValue<int?>("Image:Quality") ?? 85;
-
-        var resized = image.Clone(ctx => ctx.Resize(new ResizeOptions
+        var maxPixels = _configuration.GetValue<long?>("Image:MaxPixels") ?? 40_000_000;
+        if (targetWidth <= 0 || targetHeight <= 0 || quality is < 1 or > 100 || maxPixels <= 0)
         {
-            Mode = ResizeMode.Max,
-            Size = new Size(targetWidth, targetHeight)
-        }));
-
-        using var output = new MemoryStream();
-
-        if (normalizedContentType == "image/png")
-        {
-            await resized.SaveAsync(output, new PngEncoder());
-            return (output.ToArray(), "image/png", resized.Width, resized.Height);
+            throw new InvalidOperationException("The image-processing configuration is invalid.");
         }
 
-        await resized.SaveAsync(output, new JpegEncoder { Quality = quality });
-        return (output.ToArray(), "image/jpeg", resized.Width, resized.Height);
+        try
+        {
+            using var input = new MemoryStream(picture, writable: false);
+            var info = await Image.IdentifyAsync(input);
+            if (info is null)
+            {
+                throw new ValidationException("The uploaded file is not a supported image.");
+            }
+
+            if ((long)info.Width * info.Height > maxPixels)
+            {
+                throw new ValidationException("The uploaded image dimensions exceed the configured limit.");
+            }
+
+            input.Position = 0;
+            using var image = await Image.LoadAsync(input);
+            using var resized = image.Clone(ctx => ctx.Resize(new ResizeOptions
+            {
+                Mode = ResizeMode.Max,
+                Size = new Size(targetWidth, targetHeight)
+            }));
+
+            using var output = new MemoryStream();
+            if (normalizedContentType == "image/png")
+            {
+                await resized.SaveAsync(output, new PngEncoder());
+                return (output.ToArray(), "image/png", resized.Width, resized.Height);
+            }
+
+            await resized.SaveAsync(output, new JpegEncoder { Quality = quality });
+            return (output.ToArray(), "image/jpeg", resized.Width, resized.Height);
+        }
+        catch (ImageFormatException)
+        {
+            throw new ValidationException("The uploaded file is not a valid supported image.");
+        }
+    }
+
+    private static string NormalizeProductTypeName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ValidationException("Product type name is required.");
+            }
+
+            var normalized = name.Trim();
+            if (normalized.Length > 200)
+            {
+                throw new ValidationException("Product type name cannot exceed 200 characters.");
+            }
+
+            return normalized;
+        }
+
+    private static string NormalizeProductName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ValidationException("Product name is required.");
+            }
+
+            var normalized = name.Trim();
+            if (normalized.Length > 200)
+            {
+                throw new ValidationException("Product name cannot exceed 200 characters.");
+            }
+
+            return normalized;
+        }
+
+    private static void ValidatePrice(decimal price)
+        {
+            if (price < 0)
+            {
+                throw new ValidationException("Product price cannot be negative.");
+            }
+
+            if (price > MaximumProductPrice || decimal.Round(price, 2) != price)
+            {
+                throw new ValidationException("Product price must fit the database's two-decimal precision.");
+        }
     }
 }

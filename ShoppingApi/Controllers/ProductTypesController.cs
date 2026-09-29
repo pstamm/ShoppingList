@@ -1,6 +1,9 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ShoppingApi.DTOs.ProductTypes;
 using ShoppingApi.Services.Products;
 
@@ -36,13 +39,22 @@ public class ProductTypesController : ControllerBase
     {
         try
         {
-            var userId = User.Identity?.Name ?? "system";
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null)
+            {
+                return Unauthorized();
+            }
+
             var result = await _service.CreateProductTypeAsync(request, userId);
             return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
         catch (Exception ex) when (ex is ValidationException || ex is InvalidOperationException)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            return Conflict(new { message = "A product type with this name already exists." });
         }
     }
 
@@ -51,7 +63,12 @@ public class ProductTypesController : ControllerBase
     {
         try
         {
-            var userId = User.Identity?.Name ?? "system";
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null)
+            {
+                return Unauthorized();
+            }
+
             var result = await _service.UpdateProductTypeAsync(id, request, userId);
             return Ok(result);
         }
@@ -63,6 +80,10 @@ public class ProductTypesController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            return Conflict(new { message = "A product type with this name already exists." });
+        }
     }
 
     [HttpDelete("{id:int}")]
@@ -70,7 +91,12 @@ public class ProductTypesController : ControllerBase
     {
         try
         {
-            var userId = User.Identity?.Name ?? "system";
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null)
+            {
+                return Unauthorized();
+            }
+
             await _service.DeleteProductTypeAsync(id, userId);
             return NoContent();
         }
@@ -82,5 +108,11 @@ public class ProductTypesController : ControllerBase
         {
             return Conflict(new { message = ex.Message });
         }
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException exception)
+    {
+        return exception.InnerException is SqlException sqlException &&
+               sqlException.Number is 2601 or 2627;
     }
 }

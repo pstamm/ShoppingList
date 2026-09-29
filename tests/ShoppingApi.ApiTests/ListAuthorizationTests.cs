@@ -11,6 +11,8 @@ public class ListAuthorizationTests
     [InlineData(typeof(ShoppingListsController))]
     [InlineData(typeof(ListProductsController))]
     [InlineData(typeof(ListSharesController))]
+    [InlineData(typeof(ProductsController))]
+    [InlineData(typeof(ProductTypesController))]
     public void All_list_endpoints_require_authentication(Type controllerType)
     {
         Assert.NotNull(controllerType.GetCustomAttribute<AuthorizeAttribute>());

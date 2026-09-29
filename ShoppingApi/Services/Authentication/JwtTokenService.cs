@@ -1,7 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Security.Claims;
-using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using ShoppingApi.Domain.Entities;
@@ -30,8 +29,7 @@ public class JwtTokenService : IJwtTokenService
     {
         var issuer = _configuration["Jwt:Issuer"] ?? "ShoppingApi";
         var audience = _configuration["Jwt:Audience"] ?? "ShoppingList";
-        var signingKey = _configuration["Jwt:SigningKey"] ?? "ChangeMeSuperSecretKeyForLocalDevelopment123!";
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
+        var key = new SymmetricSecurityKey(JwtConfiguration.GetSigningKey(_configuration));
 
         var claims = new List<Claim>
         {
@@ -63,8 +61,7 @@ public class JwtTokenService : IJwtTokenService
 
     public ClaimsPrincipal ValidateAccessToken(string token)
     {
-        var signingKey = _configuration["Jwt:SigningKey"] ?? "ChangeMeSuperSecretKeyForLocalDevelopment123!";
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
+        var key = new SymmetricSecurityKey(JwtConfiguration.GetSigningKey(_configuration));
 
         var validationParameters = new TokenValidationParameters
         {

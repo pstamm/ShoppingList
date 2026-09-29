@@ -49,6 +49,31 @@ a, .btn-link {
     object-fit: contain;
 }
 
+.quantity-input {
+    max-width: 8rem;
+}
+
+.pending-quantity {
+    display: inline-block;
+    font-variant-numeric: tabular-nums;
+    min-width: 3rem;
+    text-align: center;
+}
+
+.pending-quantity-positive {
+    color: #146c43;
+    font-weight: 600;
+}
+
+.pending-quantity-zero {
+    color: #6c757d;
+}
+
+.pending-quantity-negative {
+    color: #b02a37;
+    font-weight: 600;
+}
+
 .valid.modified:not([type=checkbox]) {
     outline: 1px solid #26b050;
 }

@@ -14,15 +14,9 @@
             <div class="alert alert-warning mx-3" role="status">@logoutError</div>
         }
         <AuthorizeView>
-            <Authorized>
+            <Authorized Context="signedInContext">
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="" Match="NavLinkMatch.All">Home</NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="counter">Counter</NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="weather">Weather</NavLink>
                 </div>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="products">Products</NavLink>
@@ -31,7 +25,17 @@
                     <NavLink class="nav-link" href="product-types">Product types</NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <span class="nav-link">@context.User.Identity?.Name</span>
+                    <NavLink class="nav-link" href="lists">Shopping lists</NavLink>
+                </div>
+                <AuthorizeView Roles="Admin">
+                    <Authorized Context="adminNavContext">
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="admin">Administration</NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+                <div class="nav-item px-3">
+                    <span class="nav-link">@signedInContext.User.Identity?.Name</span>
                 </div>
                 <div class="nav-item px-3">
                     <AuthorizeView Roles="Admin">

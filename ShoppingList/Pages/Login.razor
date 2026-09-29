@@ -58,12 +58,12 @@
                 .Select(part => part.Split('=', 2))
                 .Where(parts => parts.Length == 2 && parts[0] == "returnUrl")
                 .Select(parts => Uri.UnescapeDataString(parts[1]))
-                .FirstOrDefault() ?? "/";
+                .FirstOrDefault() ?? "/lists";
             if (!returnUrl.StartsWith("/", StringComparison.Ordinal) ||
                 returnUrl.StartsWith("//", StringComparison.Ordinal) ||
                 returnUrl.Contains('\\'))
             {
-                returnUrl = "/";
+                returnUrl = "/lists";
             }
 
             Navigation.NavigateTo(returnUrl);

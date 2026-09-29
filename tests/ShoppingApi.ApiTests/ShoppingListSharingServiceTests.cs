@@ -36,6 +36,8 @@ public class ShoppingListSharingServiceTests
         Assert.Equal(-1m, listProduct.QuantityToOrder);
         Assert.Equal(0m, listProduct.PendingQuantity);
         Assert.Equal("shared note", listProduct.Notes);
+        Assert.Equal("Food", listProduct.ProductTypeName);
+        Assert.Equal(2m, listProduct.ProductPrice);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             service.CreateShareAsync(list.Id, new ShareListRequest("user-c"), "user-b", isAdmin: false));
