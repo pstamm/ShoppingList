@@ -15,6 +15,7 @@ public class ListProductConfiguration : IEntityTypeConfiguration<ListProduct>
         builder.Property(x => x.ToOrderNow).HasColumnType("int");
         builder.Property(x => x.Notes).HasMaxLength(2000);
         builder.Property(x => x.RowVersion).IsRowVersion();
+        builder.HasQueryFilter(x => x.DeletedAt == null); // use IgnoreQueryFilters() when a query intentionally needs deleted records
 
         builder.HasIndex(x => new { x.ListId, x.ProductId })
             .IsUnique()

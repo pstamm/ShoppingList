@@ -14,6 +14,7 @@ public class ShoppingListConfiguration : IEntityTypeConfiguration<ShoppingList>
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.OwnerUserId).IsRequired();
         builder.Property(x => x.RowVersion).IsRowVersion();
+        builder.HasQueryFilter(x => x.DeletedAt == null); // use IgnoreQueryFilters() when a query intentionally needs deleted records
 
         builder.HasOne(x => x.Owner)
             .WithMany()

@@ -12,6 +12,7 @@ public class ListShareConfiguration : IEntityTypeConfiguration<ListShare>
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.RowVersion).IsRowVersion();
+        builder.HasQueryFilter(x => x.DeletedAt == null); // use IgnoreQueryFilters() when a query intentionally needs deleted records
 
         builder.HasIndex(x => new { x.ListId, x.UserId })
             .IsUnique()

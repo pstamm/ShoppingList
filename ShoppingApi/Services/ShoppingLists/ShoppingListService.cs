@@ -18,18 +18,17 @@ public class ShoppingListService : IShoppingListService
     public async Task<IEnumerable<ShoppingListDto>> GetListsAsync(string userId, bool isAdmin)
     {
         var query = _dbContext.ShoppingLists
-            .AsNoTracking()
-            .Where(list => list.DeletedAt == null);
+            .AsNoTracking();
 
         if (!isAdmin)
         {
             query = query.Where(list =>
                 list.OwnerUserId == userId ||
-                list.Shares.Any(share => share.UserId == userId && share.DeletedAt == null));
+                list.Shares.Any(share => share.UserId == userId));
         }
 
         var lists = await query
-            .Include(list => list.ListProducts.Where(item => item.DeletedAt == null))
+            .Include(list => list.ListProducts)
             .ThenInclude(item => item.Product)
             .ThenInclude(product => product!.ProductType)
             .OrderBy(list => list.Name)
@@ -42,10 +41,10 @@ public class ShoppingListService : IShoppingListService
     {
         var list = await _dbContext.ShoppingLists
             .AsNoTracking()
-            .Include(item => item.ListProducts.Where(product => product.DeletedAt == null))
+            .Include(item => item.ListProducts)
             .ThenInclude(item => item.Product)
             .ThenInclude(product => product!.ProductType)
-            .FirstOrDefaultAsync(item => item.Id == listId && item.DeletedAt == null);
+            .FirstOrDefaultAsync(item => item.Id == listId);
 
         if (list is null)
         {
@@ -100,7 +99,7 @@ public class ShoppingListService : IShoppingListService
         EnsureCanDelete(list, userId, isAdmin);
 
         var hasActiveItems = await _dbContext.ListProducts
-            .AnyAsync(item => item.ListId == listId && item.DeletedAt == null);
+            .AnyAsync(item => item.ListId == listId);
         if (hasActiveItems)
         {
             throw new InvalidOperationException("A list cannot be deleted while it contains active products.");
@@ -126,7 +125,7 @@ public class ShoppingListService : IShoppingListService
 
         var items = await _dbContext.ListProducts
             .AsNoTracking()
-            .Where(item => item.ListId == listId && item.DeletedAt == null)
+            .Where(item => item.ListId == listId)
             .Include(item => item.Product)
             .ThenInclude(product => product!.ProductType)
             .OrderBy(item => item.Id)
@@ -146,7 +145,7 @@ public class ShoppingListService : IShoppingListService
         var product = await _dbContext.Products
             .AsNoTracking()
             .Include(value => value.ProductType)
-            .FirstOrDefaultAsync(value => value.Id == request.ProductId && value.DeletedAt == null);
+            .FirstOrDefaultAsync(value => value.Id == request.ProductId);
         if (product is null)
         {
             throw new KeyNotFoundException("The selected product was not found or is inactive.");
@@ -155,8 +154,7 @@ public class ShoppingListService : IShoppingListService
         var duplicateExists = await _dbContext.ListProducts
             .AnyAsync(item =>
                 item.ListId == listId &&
-                item.ProductId == request.ProductId &&
-                item.DeletedAt == null);
+                item.ProductId == request.ProductId);
         if (duplicateExists)
         {
             throw new InvalidOperationException("This product is already present in the list.");
@@ -196,8 +194,7 @@ public class ShoppingListService : IShoppingListService
             .Include(value => value.Product)
             .FirstOrDefaultAsync(value =>
                 value.Id == listProductId &&
-                value.ListId == listId &&
-                value.DeletedAt == null);
+                value.ListId == listId);
         if (item is null)
         {
             throw new KeyNotFoundException("List product was not found.");
@@ -206,7 +203,7 @@ public class ShoppingListService : IShoppingListService
         var product = await _dbContext.Products
             .AsNoTracking()
             .Include(value => value.ProductType)
-            .FirstOrDefaultAsync(value => value.Id == request.ProductId && value.DeletedAt == null);
+            .FirstOrDefaultAsync(value => value.Id == request.ProductId);
         if (product is null)
         {
             throw new KeyNotFoundException("The selected product was not found or is inactive.");
@@ -216,8 +213,7 @@ public class ShoppingListService : IShoppingListService
             .AnyAsync(value =>
                 value.Id != listProductId &&
                 value.ListId == listId &&
-                value.ProductId == request.ProductId &&
-                value.DeletedAt == null);
+                value.ProductId == request.ProductId);
         if (duplicateExists)
         {
             throw new InvalidOperationException("This product is already present in the list.");
@@ -249,8 +245,7 @@ public class ShoppingListService : IShoppingListService
         var item = await _dbContext.ListProducts
             .FirstOrDefaultAsync(value =>
                 value.Id == listProductId &&
-                value.ListId == listId &&
-                value.DeletedAt == null);
+                value.ListId == listId);
         if (item is null)
         {
             throw new KeyNotFoundException("List product was not found.");
@@ -271,7 +266,7 @@ public class ShoppingListService : IShoppingListService
 
         return await _dbContext.ListShares
             .AsNoTracking()
-            .Where(share => share.ListId == listId && share.DeletedAt == null)
+            .Where(share => share.ListId == listId)
             .OrderBy(share => share.User!.Email)
             .Select(share => new ListShareDto(
                 share.Id,
@@ -317,8 +312,7 @@ public class ShoppingListService : IShoppingListService
         var alreadyShared = await _dbContext.ListShares
             .AnyAsync(share =>
                 share.ListId == listId &&
-                share.UserId == targetUserId &&
-                share.DeletedAt == null);
+                share.UserId == targetUserId);
         if (alreadyShared)
         {
             throw new InvalidOperationException("This user already has access to the list.");
@@ -355,8 +349,7 @@ public class ShoppingListService : IShoppingListService
 
         var share = await _dbContext.ListShares.FirstOrDefaultAsync(item =>
             item.ListId == listId &&
-            item.UserId == sharedUserId &&
-            item.DeletedAt == null);
+            item.UserId == sharedUserId);
         if (share is null)
         {
             throw new KeyNotFoundException("The active share was not found.");
@@ -376,15 +369,14 @@ public class ShoppingListService : IShoppingListService
     private Task<ShoppingList?> FindListOrNullAsync(int listId)
     {
         return _dbContext.ShoppingLists
-            .FirstOrDefaultAsync(item => item.Id == listId && item.DeletedAt == null);
+            .FirstOrDefaultAsync(item => item.Id == listId);
     }
 
     private async Task EnsureCanEditAsync(ShoppingList list, string userId, bool isAdmin)
     {
         var hasActiveShare = !isAdmin && await _dbContext.ListShares.AnyAsync(share =>
             share.ListId == list.Id &&
-            share.UserId == userId &&
-            share.DeletedAt == null);
+            share.UserId == userId);
 
         if (!ShoppingListAccessPolicy.CanEdit(list, userId, isAdmin, hasActiveShare))
         {
@@ -465,7 +457,7 @@ public class ShoppingListService : IShoppingListService
     private static ShoppingListDto ToDto(ShoppingList list)
     {
         var products = list.ListProducts
-            .Where(item => item.DeletedAt == null && item.Product is not null)
+            .Where(item => item.Product is not null)
             .Select(item => ToDto(item))
             .ToList();
 

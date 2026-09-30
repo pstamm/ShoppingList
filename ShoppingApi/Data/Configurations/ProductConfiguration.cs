@@ -16,6 +16,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.Picture).HasColumnType("varbinary(max)");
         builder.Property(x => x.PictureContentType).HasMaxLength(200);
         builder.Property(x => x.RowVersion).IsRowVersion();
+        builder.HasQueryFilter(x => x.DeletedAt == null); // use IgnoreQueryFilters() when a query intentionally needs deleted records
 
         builder.HasIndex(x => x.Name)
             .IsUnique()

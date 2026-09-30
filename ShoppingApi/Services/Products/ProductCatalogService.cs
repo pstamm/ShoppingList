@@ -27,7 +27,6 @@ public class ProductCatalogService : IProductCatalogService
     {
         return await _dbContext.ProductTypes
             .AsNoTracking()
-            .Where(x => x.DeletedAt == null)
             .OrderBy(x => x.Name)
             .Select(x => new ProductTypeDto(
                 x.Id,
@@ -42,7 +41,7 @@ public class ProductCatalogService : IProductCatalogService
     {
         return await _dbContext.ProductTypes
             .AsNoTracking()
-            .Where(x => x.Id == id && x.DeletedAt == null)
+            .Where(x => x.Id == id)
             .Select(x => new ProductTypeDto(
                 x.Id,
                 x.Name,
@@ -56,7 +55,7 @@ public class ProductCatalogService : IProductCatalogService
     {
         var normalizedName = NormalizeProductTypeName(request.Name);
         var exists = await _dbContext.ProductTypes
-            .AnyAsync(x => x.Name == normalizedName && x.DeletedAt == null);
+            .AnyAsync(x => x.Name == normalizedName);
 
         if (exists)
         {
@@ -80,7 +79,7 @@ public class ProductCatalogService : IProductCatalogService
 
     public async Task<ProductTypeDto> UpdateProductTypeAsync(int id, UpdateProductTypeRequest request, string userId)
     {
-        var entity = await _dbContext.ProductTypes.FirstOrDefaultAsync(x => x.Id == id && x.DeletedAt == null);
+        var entity = await _dbContext.ProductTypes.FirstOrDefaultAsync(x => x.Id == id);
         if (entity is null)
         {
             throw new KeyNotFoundException("Product type was not found.");
@@ -89,7 +88,7 @@ public class ProductCatalogService : IProductCatalogService
         var normalizedName = NormalizeProductTypeName(request.Name);
 
         var nameExists = await _dbContext.ProductTypes
-            .AnyAsync(x => x.Id != id && x.Name == normalizedName && x.DeletedAt == null);
+            .AnyAsync(x => x.Id != id && x.Name == normalizedName);
 
         if (nameExists)
         {
@@ -107,13 +106,13 @@ public class ProductCatalogService : IProductCatalogService
 
     public async Task DeleteProductTypeAsync(int id, string userId)
     {
-        var entity = await _dbContext.ProductTypes.FirstOrDefaultAsync(x => x.Id == id && x.DeletedAt == null);
+        var entity = await _dbContext.ProductTypes.FirstOrDefaultAsync(x => x.Id == id);
         if (entity is null)
         {
             throw new KeyNotFoundException("Product type was not found.");
         }
 
-        var hasActiveProducts = await _dbContext.Products.AnyAsync(x => x.ProductTypeId == id && x.DeletedAt == null);
+        var hasActiveProducts = await _dbContext.Products.AnyAsync(x => x.ProductTypeId == id);
         if (hasActiveProducts)
         {
             throw new InvalidOperationException("A product type cannot be deleted while active products reference it.");
@@ -131,7 +130,6 @@ public class ProductCatalogService : IProductCatalogService
     {
         var query = _dbContext.Products
             .AsNoTracking()
-            .Where(x => x.DeletedAt == null)
             .Include(x => x.ProductType)
             .AsQueryable();
 
@@ -166,7 +164,7 @@ public class ProductCatalogService : IProductCatalogService
     {
         return await _dbContext.Products
             .AsNoTracking()
-            .Where(x => x.Id == id && x.DeletedAt == null)
+            .Where(x => x.Id == id)
             .Select(x => new ProductDto(
                 x.Id,
                 x.Name,
@@ -194,7 +192,7 @@ public class ProductCatalogService : IProductCatalogService
         ValidatePrice(request.Price);
 
         var productTypeExists = await _dbContext.ProductTypes
-            .AnyAsync(x => x.Id == request.ProductTypeId && x.DeletedAt == null);
+            .AnyAsync(x => x.Id == request.ProductTypeId);
 
         if (!productTypeExists)
         {
@@ -202,7 +200,7 @@ public class ProductCatalogService : IProductCatalogService
         }
 
         var nameExists = await _dbContext.Products
-            .AnyAsync(x => x.Name == productName && x.DeletedAt == null);
+            .AnyAsync(x => x.Name == productName);
 
         if (nameExists)
         {
@@ -245,7 +243,7 @@ public class ProductCatalogService : IProductCatalogService
 
     public async Task<ProductDto> UpdateProductAsync(int id, UpdateProductRequest request, string userId)
     {
-        var entity = await _dbContext.Products.FirstOrDefaultAsync(x => x.Id == id && x.DeletedAt == null);
+        var entity = await _dbContext.Products.FirstOrDefaultAsync(x => x.Id == id);
         if (entity is null)
         {
             throw new KeyNotFoundException("Product was not found.");
@@ -261,7 +259,7 @@ public class ProductCatalogService : IProductCatalogService
         ValidatePrice(request.Price);
 
         var productTypeExists = await _dbContext.ProductTypes
-            .AnyAsync(x => x.Id == request.ProductTypeId && x.DeletedAt == null);
+            .AnyAsync(x => x.Id == request.ProductTypeId);
 
         if (!productTypeExists)
         {
@@ -269,7 +267,7 @@ public class ProductCatalogService : IProductCatalogService
         }
 
         var nameExists = await _dbContext.Products
-            .AnyAsync(x => x.Id != id && x.Name == productName && x.DeletedAt == null);
+            .AnyAsync(x => x.Id != id && x.Name == productName);
 
         if (nameExists)
         {
@@ -308,7 +306,7 @@ public class ProductCatalogService : IProductCatalogService
     {
         var entity = await _dbContext.Products
             .Include(x => x.ListProducts)
-            .FirstOrDefaultAsync(x => x.Id == id && x.DeletedAt == null);
+            .FirstOrDefaultAsync(x => x.Id == id);
 
         if (entity is null)
         {
@@ -316,7 +314,7 @@ public class ProductCatalogService : IProductCatalogService
         }
 
         var hasActiveDependents = await _dbContext.ListProducts
-            .AnyAsync(x => x.ProductId == id && x.DeletedAt == null);
+            .AnyAsync(x => x.ProductId == id);
 
         if (hasActiveDependents)
         {
