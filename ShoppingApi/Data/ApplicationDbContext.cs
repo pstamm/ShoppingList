@@ -13,6 +13,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ListProduct> ListProducts { get; set; }
     public DbSet<ListShare> ListShares { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
+    public DbSet<Audit> Audit { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -29,6 +30,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.ApplyConfiguration(new ListProductConfiguration());
         builder.ApplyConfiguration(new ListShareConfiguration());
         builder.ApplyConfiguration(new RefreshTokenConfiguration());
+        builder.ApplyConfiguration(new AuditConfiguration());
 
         builder.Entity<ApplicationUser>(entity =>
         {
