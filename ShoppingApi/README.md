@@ -21,10 +21,10 @@ dotnet run --project ShoppingApi\ShoppingApi.csproj
 
 ## Run the Backend
 
-´´´
+```
 cd ...\ShoppingList
 dotnet run --project .\ShoppingList\ShoppingList.csproj
-´´´
+```
 
 The frontend opens at  https://localhost:7271  (or  http://localhost:5020 ). It expects the API at  https://localhost:7271/ or http://localhost:5216 per ShoppingList\wwwroot\appsettings.json; make sure the backend is running at the configured API URL too.
 
