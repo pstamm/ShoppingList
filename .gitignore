@@ -6,7 +6,8 @@ obj/
 
 # Visual Studio / VS Code
 .vs/
-.vscode/
+.vscode/*
+!.vscode/mcp.json
 *.user
 *.suo
 *.userosscache

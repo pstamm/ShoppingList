@@ -19,7 +19,7 @@ $env:Jwt__SigningKey = "g1dymnXBVNjCDR98OOjnQuytsT5MSUXH"
 dotnet run --project ShoppingApi\ShoppingApi.csproj
 ```
 
-## Run the Backend
+## Run the Frontend
 
 ```
 cd ...\ShoppingList

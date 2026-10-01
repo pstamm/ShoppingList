@@ -97,19 +97,19 @@ a, .btn-link {
 }
 
 .shopping-list-product-column {
-    width: 27%;
+    width: 24%;
 }
 
 .shopping-list-quantity-column {
-    width: 12%;
+    width: 15%;
 }
 
 .shopping-list-notes-column {
-    width: 22%;
+    width: 20%;
 }
 
 .shopping-list-actions-column {
-    width: 27%;
+    width: 26%;
 }
 
 .shopping-list-truncated {
