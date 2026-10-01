@@ -81,7 +81,7 @@ public class ShoppingListService : IShoppingListService
         bool isAdmin)
     {
         var list = await FindListAsync(listId);
-        await EnsureCanEditAsync(list, userId, isAdmin);
+        EnsureCanManageListName(list, userId, isAdmin);
         var name = NormalizeName(request.Name);
 
         SetOriginalRowVersion(list, request.RowVersion);
@@ -389,6 +389,14 @@ public class ShoppingListService : IShoppingListService
         if (!ShoppingListAccessPolicy.CanManageSharing(list, userId, isAdmin))
         {
             throw new UnauthorizedAccessException("Only the list owner or an administrator can manage shares.");
+        }
+    }
+
+    private static void EnsureCanManageListName(ShoppingList list, string userId, bool isAdmin)
+    {
+        if (!ShoppingListAccessPolicy.CanManageSharing(list, userId, isAdmin))
+        {
+            throw new UnauthorizedAccessException("Only the list owner or an administrator can rename the list.");
         }
     }
 

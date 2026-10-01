@@ -41,11 +41,31 @@ public class ShoppingListSharingServiceTests
         Assert.Equal(2m, listProduct.ProductPrice);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.UpdateListAsync(
+                list.Id,
+                new UpdateShoppingListRequest("Renamed by shared user", Convert.ToBase64String(new byte[8])),
+                "user-b",
+                isAdmin: false));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             service.CreateShareAsync(list.Id, new ShareListRequest("user-c"), "user-b", isAdmin: false));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             service.DeleteListAsync(list.Id, string.Empty, "user-b", isAdmin: false));
 
         await service.RemoveShareAsync(list.Id, "user-b", "user-a", isAdmin: false);
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            service.UpdateListAsync(
+                list.Id,
+                new UpdateShoppingListRequest("Renamed by owner", string.Empty),
+                "user-a",
+                isAdmin: false));
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            service.UpdateListAsync(
+                list.Id,
+                new UpdateShoppingListRequest("Renamed by admin", string.Empty),
+                "admin-id",
+                isAdmin: true));
 
         Assert.Empty(await service.GetSharesAsync(list.Id, "user-a", isAdmin: false));
         Assert.DoesNotContain((await service.GetListsAsync("user-b", isAdmin: false)), item => item.Id == list.Id);

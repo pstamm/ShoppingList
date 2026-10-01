@@ -63,7 +63,11 @@
                 .Where(parts => parts.Length == 2 && parts[0] == "returnUrl")
                 .Select(parts => Uri.UnescapeDataString(parts[1]))
                 .FirstOrDefault() ?? "/lists";
-            if (!returnUrl.StartsWith("/", StringComparison.Ordinal) ||
+            if (returnUrl == "/")
+            {
+                returnUrl = "/lists";
+            }
+            else if (!returnUrl.StartsWith("/", StringComparison.Ordinal) ||
                 returnUrl.StartsWith("//", StringComparison.Ordinal) ||
                 returnUrl.Contains('\\'))
             {
